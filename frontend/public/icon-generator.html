@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <title>Do'kon Qarz - Icon Generator</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
+    canvas { border: 1px solid #ddd; border-radius: 8px; margin: 8px; }
+    button { padding: 10px 20px; background: #6366f1; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 8px; font-size: 14px; }
+    button:hover { background: #4f46e5; }
+    h2 { color: #333; }
+    .note { background: #fff3cd; padding: 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <h2>🏪 Do'kon Qarz — PWA Icon Generator</h2>
+  <div class="note">
+    ⚠️ Ushbu sahifani brauzerda oching, icon-192.png va icon-512.png ni yuklab oling,
+    keyin <strong>frontend/public/</strong> papkasiga joylang.
+  </div>
+
+  <canvas id="c192" width="192" height="192"></canvas>
+  <canvas id="c512" width="512" height="512"></canvas>
+  <br>
+  <button onclick="download('c192', 'icon-192.png')">⬇️ icon-192.png yuklab olish</button>
+  <button onclick="download('c512', 'icon-512.png')">⬇️ icon-512.png yuklab olish</button>
+
+  <script>
+    function drawIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const s = canvas.width;
+      const r = s * 0.18; // border radius
+
+      // Background
+      ctx.clearRect(0, 0, s, s);
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(s - r, 0);
+      ctx.quadraticCurveTo(s, 0, s, r);
+      ctx.lineTo(s, s - r);
+      ctx.quadraticCurveTo(s, s, s - r, s);
+      ctx.lineTo(r, s);
+      ctx.quadraticCurveTo(0, s, 0, s - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.closePath();
+      ctx.fillStyle = '#6366f1';
+      ctx.fill();
+
+      // Shop icon (simplified store)
+      const cx = s / 2;
+      const cy = s / 2;
+      const unit = s / 8;
+
+      ctx.fillStyle = 'white';
+
+      // Roof (triangle-ish)
+      ctx.beginPath();
+      ctx.moveTo(cx - unit * 2.5, cy - unit * 0.5);
+      ctx.lineTo(cx, cy - unit * 2.2);
+      ctx.lineTo(cx + unit * 2.5, cy - unit * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Door
+      ctx.fillRect(cx - unit * 0.8, cy + unit * 0.5, unit * 1.6, unit * 1.8);
+
+      // Window left
+      ctx.fillRect(cx - unit * 2.2, cy - unit * 0.3, unit * 1.0, unit * 0.9);
+
+      // Window right
+      ctx.fillRect(cx + unit * 1.2, cy - unit * 0.3, unit * 1.0, unit * 0.9);
+
+      // Ground bar
+      ctx.fillRect(cx - unit * 2.8, cy - unit * 0.7, unit * 5.6, unit * 0.35);
+
+      // Coin symbol (bottom right)
+      ctx.beginPath();
+      ctx.arc(cx + unit * 1.8, cy + unit * 1.9, unit * 0.75, 0, Math.PI * 2);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fill();
+
+      ctx.fillStyle = '#6366f1';
+      ctx.font = `bold ${unit * 0.9}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('$', cx + unit * 1.8, cy + unit * 1.95);
+    }
+
+    drawIcon(document.getElementById('c192'));
+    drawIcon(document.getElementById('c512'));
+
+    function download(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+  </script>
+</body>
+</html>
