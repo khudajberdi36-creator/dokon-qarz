@@ -1,108 +1,63 @@
-# 🏪 Do'kon Qarz — Qarzlarni boshqarish tizimi
+# 🏪 Dokon-Qarz — Deploy Qo'llanmasi
 
-Do'kon egasi uchun qarzlarni kuzatish, aloqa qilish va eslatma yuborish tizimi.
-
----
-
-## ✨ Imkoniyatlar
-
-- 🔐 **Login / Ro'yxatdan o'tish** — Har bir do'kon egasi uchun alohida akkaunt
-- 👥 **Qarzdorlar** — Ism, telefon, Telegram, Instagram, WhatsApp saqlash
-- 💸 **Qarzlar** — Summa, sana, muddat, sabab bilan qo'shish
-- ✅ **To'lovlar** — Qisman to'lovlarni kuzatish
-- ⏰ **Muddati o'tgan** — Kechikkan qarzlarni alohida ko'rish
-- 📤 **Eslatma yuborish** — Bir tugma bilan qo'ng'iroq / TG / WA / IG orqali bog'lanish
-- 📊 **Dashboard** — Umumiy statistika
-
----
-
-## 🚀 O'rnatish
-
-### Backend (Render.com)
-
-```bash
-cd backend
-npm install
-node server.js
-```
-
-**Render.com'ga deploy:**
-1. GitHub'ga push qiling
-2. render.com → New Web Service
-3. `backend` papkasini tanlang
-4. Build: `npm install` | Start: `node server.js`
-5. Environment variable: `JWT_SECRET=istalgan_maxfiy_so'z`
-
-### Frontend (Vercel)
-
-```bash
-cd frontend
-npm install
-npm start
-```
-
-**Vercel'ga deploy:**
-1. `frontend/vercel.json` ichidagi `YOUR-BACKEND-URL` ni Render URL bilan almashtiring
-2. `vercel.com` → New Project → GitHub repo → `frontend` papkasini tanlang
-3. Deploy!
-
----
-
-## 📁 Loyiha tuzilmasi
-
+## Loyiha tuzilmasi
 ```
 dokon-qarz/
-├── backend/
-│   ├── server.js
-│   ├── database.js        ← SQLite (dokon_qarz.db)
-│   ├── middleware/auth.js ← JWT
-│   ├── routes/
-│   │   ├── auth.js        ← Login/Register
-│   │   ├── qarzdorlar.js  ← CRUD
-│   │   ├── qarzlar.js     ← Qarz + To'lovlar
-│   │   └── stats.js       ← Dashboard statistika
-│   ├── package.json
-│   └── render.yaml
-│
-└── frontend/
-    ├── public/index.html
-    ├── src/
-    │   ├── App.js
-    │   ├── index.css      ← Pro dark dizayn
-    │   ├── context/AuthContext.js
-    │   ├── components/Layout.js
-    │   └── pages/
-    │       ├── Login.js
-    │       ├── Dashboard.js
-    │       ├── Qarzdorlar.js
-    │       ├── QarzdorForm.js
-    │       ├── QarzdorDetail.js
-    │       └── MuddatiOtgan.js
-    ├── package.json
-    └── vercel.json
+├── backend/     → Render.com ga deploy
+└── frontend/    → Vercel ga deploy
 ```
 
 ---
 
-## 🛠 Texnologiyalar
+## 1️⃣ BACKEND — Render.com ga deploy
 
-| | Texnologiya |
-|---|---|
-| Frontend | React 18, React Router 6, Axios |
-| Backend | Node.js, Express.js |
-| Database | SQLite (better-sqlite3) |
-| Auth | JWT (30 kunlik) |
-| Styling | Custom CSS (dark theme) |
+### Qadamlar:
+1. `backend/` papkasini GitHub repoga yuklang
+2. https://render.com ga kiring → **New Web Service**
+3. GitHub reponi ulang
+4. **Environment Variables** bo'limiga quyidagilarni kiriting:
+
+| Variable | Qiymat |
+|----------|--------|
+| `DATABASE_URL` | `postgresql://postgres:PAROL@db.XXXX.supabase.co:5432/postgres` |
+| `JWT_SECRET` | O'zingiz ixtiyoriy maxfiy kalit kiriting |
+| `RESET_SECRET` | O'zingiz ixtiyoriy maxfiy kalit kiriting |
+| `NODE_ENV` | `production` |
+| `USER1_LOGIN` | masalan: `begzod` |
+| `USER1_PASSWORD` | foydalanuvchi paroli |
+| `USER1_NAME` | masalan: `Begzod` |
+| `USER1_DOKON` | masalan: `Mega Market` |
+| `ADMIN_LOGIN` | masalan: `admin` |
+| `ADMIN_PASSWORD` | admin paroli |
+
+5. Deploy bo'lgach, backend URL ni copy qiling (masalan: `https://dokon-qarz.onrender.com`)
 
 ---
 
-## 🔗 Aloqa kanallar
+## 2️⃣ FRONTEND — Vercel ga deploy
 
-Tizim quyidagi kanallar orqali qarz eslatmasi yuborishni qo'llab-quvvatlaydi:
+### Qadamlar:
+1. `frontend/vercel.json` faylini oching
+2. `BACKEND_URL_SIZU.onrender.com` ni o'rniga real backend URL ni qo'ying:
+   ```json
+   { "source": "/api/:path*", "destination": "https://SIZNING-BACKEND.onrender.com/api/:path*" }
+   ```
+3. `frontend/` papkasini GitHub repoga yuklang (yoki alohida repo)
+4. https://vercel.com → **New Project** → reponi ulang
+5. **Root Directory** = `frontend` deb belgilang
+6. Deploy bosing ✅
 
-| Kanal | Amal |
-|---|---|
-| 📞 Telefon | Bevosita qo'ng'iroq |
-| ✈️ Telegram | Profilga o'tish |
-| 💬 WhatsApp | Tayyor xabar bilan ochish |
-| 📸 Instagram | DM sahifasiga o'tish |
+---
+
+## ✅ Tekshirish
+- Backend ishlayotganini: `https://sizning-backend.onrender.com/` ga kiring → `{"status":"ok"}` ko'rsanggiz ishlayapti
+- Supabase jadvallar birinchi ishga tushganda avtomatik yaratiladi
+- Birinchi kirishda: `USER1_LOGIN` va `USER1_PASSWORD` bilan kiring
+
+---
+
+## 🔐 Parol reset qilish
+```
+POST https://sizning-backend.onrender.com/api/auth/reset-password
+Body: { "secret": "RESET_SECRET qiymati", "username": "begzod", "new_password": "yangiparol" }
+```

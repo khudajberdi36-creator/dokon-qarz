@@ -4,8 +4,13 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
+
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 const authLimiter = rateLimit({
@@ -23,6 +28,8 @@ app.use('/api/qarzdorlar', require('./routes/qarzdorlar'));
 app.use('/api/qarzlar', require('./routes/qarzlar'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/admin', require('./routes/admin'));
+
+app.get('/', (req, res) => res.json({ status: 'ok', message: 'Dokon-Qarz API ishlamoqda ✅' }));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server ${PORT} portda ishlamoqda`));
