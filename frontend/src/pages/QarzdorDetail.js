@@ -10,8 +10,22 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
     sana: new Date().toISOString().split('T')[0],
     muddat: '', sabab: ''
   });
+  const [mahsulotlar, setMahsulotlar] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    axios.get('/api/mahsulotlar').then(r => setMahsulotlar(r.data)).catch(() => {});
+  }, []);
+
+  const handleMahsulot = (e) => {
+    const m = mahsulotlar.find(m => String(m.id) === e.target.value);
+    if (m) {
+      setForm(f => ({ ...f, mahsulot_id: m.id, summa: String(m.narx), sabab: m.nomi }));
+    } else {
+      setForm(f => ({ ...f, mahsulot_id: null }));
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,15 +49,24 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
             {error && <div className="error-msg">⚠️ {error}</div>}
+            {/* ✅ YANGI: Mahsulotdan tanlash */}
+            {mahsulotlar.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">📦 Mahsulotdan tanlash (ixtiyoriy)</label>
+                <select onChange={handleMahsulot} className="form-input" defaultValue="">
+                  <option value="">— Qo'lda kiritish —</option>
+                  {mahsulotlar.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.emoji || '📦'} {m.nomi} — {formatSum(m.narx)} so'm (Qoldi: {m.miqdor} {m.birlik})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Summa *</label>
-                <SummaInput
-                  value={form.summa}
-                  onChange={val => setForm({...form, summa: val})}
-                  placeholder="100 000"
-                  required
-                />
+                <SummaInput value={form.summa} onChange={val => setForm({...form, summa: val})} placeholder="100 000" required />
               </div>
               <div className="form-group">
                 <label className="form-label">Valyuta</label>
@@ -57,19 +80,16 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Qarz sanasi *</label>
-                <input type="date" value={form.sana} onChange={e => setForm({...form, sana: e.target.value})}
-                  className="form-input" required />
+                <input type="date" value={form.sana} onChange={e => setForm({...form, sana: e.target.value})} className="form-input" required />
               </div>
               <div className="form-group">
                 <label className="form-label">Qaytarish muddati</label>
-                <input type="date" value={form.muddat} onChange={e => setForm({...form, muddat: e.target.value})}
-                  className="form-input" />
+                <input type="date" value={form.muddat} onChange={e => setForm({...form, muddat: e.target.value})} className="form-input" />
               </div>
             </div>
             <div className="form-group">
               <label className="form-label">Sabab / Izoh</label>
-              <input value={form.sabab} onChange={e => setForm({...form, sabab: e.target.value})}
-                className="form-input" placeholder="Masalan: oziq-ovqat, kiyim-kechak..." />
+              <input value={form.sabab} onChange={e => setForm({...form, sabab: e.target.value})} className="form-input" placeholder="Masalan: oziq-ovqat, kiyim-kechak..." />
             </div>
           </div>
           <div className="modal-footer">
@@ -112,32 +132,80 @@ function AddTolovModal({ qarzId, qarzSumma, onClose, onSuccess }) {
           <div className="modal-body">
             {error && <div className="error-msg">⚠️ {error}</div>}
             <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: 'var(--text2)' }}>
-              Qarz summasi: <strong style={{ color: 'var(--text)', fontFamily: 'JetBrains Mono', fontSize: 15 }}>{formatSum(qarzSumma)} so'm</strong>
+              Qolgan qarz: <strong style={{ color: 'var(--text)', fontFamily: 'JetBrains Mono', fontSize: 15 }}>{formatSum(qarzSumma)} so'm</strong>
             </div>
             <div className="form-group">
               <label className="form-label">To'lov summasi *</label>
-              <SummaInput
-                value={form.summa}
-                onChange={val => setForm({...form, summa: val})}
-                placeholder={formatSum(qarzSumma)}
-                required
-              />
+              <SummaInput value={form.summa} onChange={val => setForm({...form, summa: val})} placeholder={formatSum(qarzSumma)} required />
             </div>
             <div className="form-group">
               <label className="form-label">Sana *</label>
-              <input type="date" value={form.sana} onChange={e => setForm({...form, sana: e.target.value})}
-                className="form-input" required />
+              <input type="date" value={form.sana} onChange={e => setForm({...form, sana: e.target.value})} className="form-input" required />
             </div>
             <div className="form-group">
               <label className="form-label">Izoh</label>
-              <input value={form.izoh} onChange={e => setForm({...form, izoh: e.target.value})}
-                className="form-input" placeholder="Ixtiyoriy..." />
+              <input value={form.izoh} onChange={e => setForm({...form, izoh: e.target.value})} className="form-input" placeholder="Ixtiyoriy..." />
             </div>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Bekor</button>
             <button type="submit" className="btn btn-success" disabled={loading}>
               {loading ? <span className="spinner" /> : "✅ To'lov saqlash"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ✅ YANGI: Muddat uzaytirish modal
+function MuddatModal({ qarzId, currentMuddat, onClose, onSuccess }) {
+  const [yangiMuddat, setYangiMuddat] = useState('');
+  const [sabab, setSabab] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!yangiMuddat) return setError("Yangi muddat kiriting");
+    setLoading(true);
+    try {
+      await axios.put(`/api/qarzlar/${qarzId}/muddat`, { yangi_muddat: yangiMuddat, sabab });
+      onSuccess();
+    } catch (err) {
+      setError(err.response?.data?.error || "Xatolik");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 380 }}>
+        <div className="modal-header">
+          <h2>📅 Muddatni uzaytirish</h2>
+          <button className="btn btn-secondary btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            {error && <div className="error-msg">⚠️ {error}</div>}
+            {currentMuddat && (
+              <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: 'var(--text2)' }}>
+                Hozirgi muddat: <strong>{new Date(currentMuddat).toLocaleDateString('uz-UZ')}</strong>
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Yangi muddat *</label>
+              <input type="date" value={yangiMuddat} onChange={e => setYangiMuddat(e.target.value)} className="form-input" required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Sababni izoh (ixtiyoriy)</label>
+              <input value={sabab} onChange={e => setSabab(e.target.value)} className="form-input" placeholder="Masalan: kelishuvga ko'ra..." />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Bekor</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? <span className="spinner" /> : "📅 Saqlash"}
             </button>
           </div>
         </form>
@@ -153,11 +221,21 @@ export default function QarzdorDetail() {
   const [loading, setLoading] = useState(true);
   const [showQarzModal, setShowQarzModal] = useState(false);
   const [showTolovModal, setShowTolovModal] = useState(null);
+  const [showMuddatModal, setShowMuddatModal] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [eslatmaKopiyalandi, setEslatmaKopiyalandi] = useState(false);
+  // ✅ YANGI: eslatma tahrirlash
+  const [eslatmaEdit, setEslatmaEdit] = useState(false);
+  const [eslatmaText, setEslatmaText] = useState('');
+  const [eslatmaSaving, setEslatmaSaving] = useState(false);
 
   const load = useCallback(() => {
     axios.get(`/api/qarzdorlar/${id}`)
-      .then(r => { setData(r.data); setLoading(false); })
+      .then(r => {
+        setData(r.data);
+        setEslatmaText(r.data.eslatma || '');
+        setLoading(false);
+      })
       .catch(() => navigate('/qarzdorlar'));
   }, [id, navigate]);
 
@@ -173,9 +251,26 @@ export default function QarzdorDetail() {
     load();
   };
 
+  // ✅ YANGI: Eslatma saqlash
+  const handleEslatmaSave = async () => {
+    setEslatmaSaving(true);
+    try {
+      await axios.put(`/api/qarzdorlar/${id}`, {
+        ism: data.ism, familiya: data.familiya, telefon: data.telefon,
+        telegram: data.telegram, instagram: data.instagram, whatsapp: data.whatsapp,
+        manzil: data.manzil, izoh: data.izoh, eslatma: eslatmaText
+      });
+      setEslatmaEdit(false);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.error || "Xatolik");
+    } finally { setEslatmaSaving(false); }
+  };
+
   const printChek = (qarz) => {
     const win = window.open('', '_blank', 'width=320,height=500');
     const sana = new Date(qarz.sana).toLocaleDateString('uz-UZ');
+    const qarzKod = qarz.qarz_raqam ? `QRZ-${String(qarz.qarz_raqam).padStart(4,'0')}` : '';
     win.document.write(`
       <html><head><title>Chek</title>
       <style>
@@ -184,8 +279,10 @@ export default function QarzdorDetail() {
         .row{display:flex;justify-content:space-between;margin:3px 0}
         .total{font-size:16px;font-weight:bold;border-top:1px dashed #000;padding-top:6px;margin-top:6px}
         .footer{text-align:center;margin-top:10px;font-size:10px;color:#666}
+        .qrz{color:#999;font-size:10px;text-align:right}
       </style></head><body>
       <h2>🏪 Do'kon Qarz<br/><small>${data?.dokon_nomi || ''}</small></h2>
+      ${qarzKod ? `<div class="qrz">#${qarzKod}</div>` : ''}
       <div class="row"><span>Qarzdor:</span><span>${data.ism} ${data.familiya || ''}</span></div>
       <div class="row"><span>Telefon:</span><span>${data.telefon}</span></div>
       <div class="row"><span>Sana:</span><span>${sana}</span></div>
@@ -200,6 +297,13 @@ export default function QarzdorDetail() {
     win.print();
   };
 
+  const copyEslatma = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setEslatmaKopiyalandi(true);
+      setTimeout(() => setEslatmaKopiyalandi(false), 2000);
+    });
+  };
+
   if (loading) return <div className="loading-page"><div className="spinner" /></div>;
   if (!data) return null;
 
@@ -207,7 +311,7 @@ export default function QarzdorDetail() {
   const paidQarzlar = data.qarzlar?.filter(q => q.status === 'paid') || [];
   const jami_qarz = activeQarzlar.reduce((s, q) => s + Number(q.qolgan_summa || 0), 0);
 
-  const eslatmaText = `Assalomu alaykum ${data.ism}! Do'konimizdan qarzingiz bor edi: ${formatSum(jami_qarz)} so'm. Iltimos, imkoningiz bo'lsa to'lab qo'ysangiz. Rahmat! 🙏`;
+  const xabarMatni = `Assalomu alaykum ${data.ism}! Do'konimizdan qarzingiz bor edi: ${formatSum(jami_qarz)} so'm. Iltimos, imkoningiz bo'lsa to'lab qo'ysangiz. Rahmat! 🙏`;
 
   return (
     <div>
@@ -249,16 +353,53 @@ export default function QarzdorDetail() {
         </div>
       </div>
 
+      {/* ✅ YANGI: Shaxsiy eslatma */}
+      <div className="table-card" style={{ marginBottom: 16 }}>
+        <div style={{ padding: '14px 18px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: eslatmaEdit ? 10 : 6 }}>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>📝 Shaxsiy eslatma</span>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setEslatmaEdit(!eslatmaEdit)}
+            >
+              {eslatmaEdit ? 'Bekor' : '✏️ Tahrirlash'}
+            </button>
+          </div>
+          {eslatmaEdit ? (
+            <div>
+              <textarea
+                value={eslatmaText}
+                onChange={e => setEslatmaText(e.target.value)}
+                className="form-input"
+                rows={3}
+                placeholder={`Masalan: "garov bor", "ishonchli", "ehtiyot bo'l"...`}
+                style={{ resize: 'vertical', fontSize: 13 }}
+              />
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleEslatmaSave}
+                disabled={eslatmaSaving}
+                style={{ marginTop: 8 }}
+              >
+                {eslatmaSaving ? '⏳ Saqlanmoqda...' : '💾 Saqlash'}
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: 13, color: data.eslatma ? 'var(--text)' : 'var(--text3)', fontStyle: data.eslatma ? 'normal' : 'italic' }}>
+              {data.eslatma || "Eslatma yo'q"}
+            </p>
+          )}
+        </div>
+      </div>
+
       {jami_qarz > 0 && (
         <div className="eslatma-card">
-          <h3>📤 Qarz eslatmasi yuborish</h3>
+          <h3>📤 Qarz xabari yuborish</h3>
           <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
-            Quyidagi tugmalardan birini bosib, tayyor xabarni yuboring
+            Bir tugma bilan WhatsApp/Telegram ga tayyor matn
           </p>
           <div className="eslatma-buttons">
-            <a href={`tel:${data.telefon}`} className="eslatma-btn eslatma-phone">
-              📞 Qo'ng'iroq
-            </a>
+            <a href={`tel:${data.telefon}`} className="eslatma-btn eslatma-phone">📞 Qo'ng'iroq</a>
             {data.telegram && (
               <a href={`https://t.me/${data.telegram.startsWith('+') ? data.telegram : data.telegram.replace('@','')}`}
                 target="_blank" rel="noreferrer" className="eslatma-btn eslatma-telegram">
@@ -266,21 +407,21 @@ export default function QarzdorDetail() {
               </a>
             )}
             {data.whatsapp && (
-              <a href={`https://wa.me/${data.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(eslatmaText)}`}
+              <a href={`https://wa.me/${data.whatsapp.replace(/\D/g,'')}?text=${encodeURIComponent(xabarMatni)}`}
                 target="_blank" rel="noreferrer" className="eslatma-btn eslatma-whatsapp">
                 💬 WhatsApp
               </a>
             )}
-            {data.instagram && (
-              <a href={`https://instagram.com/${data.instagram.replace('@','')}`}
-                target="_blank" rel="noreferrer" className="eslatma-btn eslatma-instagram">
-                📸 Instagram
-              </a>
-            )}
           </div>
-          <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--bg3)', borderRadius: 8, fontSize: 12, color: 'var(--text2)', borderLeft: '3px solid var(--accent)' }}>
-            <strong style={{ color: 'var(--text)', display: 'block', marginBottom: 4 }}>📋 Tayyor xabar (nusxa oling):</strong>
-            <span style={{ userSelect: 'all' }}>{eslatmaText}</span>
+          <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--bg3)', borderRadius: 8, fontSize: 12, color: 'var(--text2)', borderLeft: '3px solid var(--accent)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+            <span style={{ userSelect: 'all', flex: 1 }}>{xabarMatni}</span>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => copyEslatma(xabarMatni)}
+              style={{ flexShrink: 0 }}
+            >
+              {eslatmaKopiyalandi ? '✅ Kopiyalandi' : '📋 Nusxa'}
+            </button>
           </div>
         </div>
       )}
@@ -301,7 +442,15 @@ export default function QarzdorDetail() {
           activeQarzlar.map(qarz => (
             <div key={qarz.id} className="qarz-item">
               <div className="qarz-item-info">
-                <div className="qarz-item-sabab">{qarz.sabab || "Sabab ko'rsatilmagan"}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  {/* ✅ YANGI: Qarz raqami */}
+                  {qarz.qarz_raqam > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'rgba(99,102,241,0.1)', padding: '2px 7px', borderRadius: 6, fontFamily: 'monospace' }}>
+                      QRZ-{String(qarz.qarz_raqam).padStart(4, '0')}
+                    </span>
+                  )}
+                  <span className="qarz-item-sabab">{qarz.sabab || "Sabab ko'rsatilmagan"}</span>
+                </div>
                 <div className="qarz-item-date">
                   📅 {new Date(qarz.sana).toLocaleDateString('uz-UZ')}
                   {qarz.muddat && (
@@ -313,6 +462,20 @@ export default function QarzdorDetail() {
                     </span>
                   )}
                 </div>
+
+                {/* ✅ YANGI: To'lov tarixi */}
+                {qarz.tolovlar && qarz.tolovlar.length > 0 && (
+                  <div style={{ marginTop: 8, paddingLeft: 8, borderLeft: '2px solid var(--accent)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginBottom: 4 }}>To'lovlar tarixi:</div>
+                    {qarz.tolovlar.map((t, i) => (
+                      <div key={i} style={{ fontSize: 12, color: 'var(--text2)', display: 'flex', gap: 8, marginBottom: 2 }}>
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>+{formatSum(t.summa)}</span>
+                        <span>{new Date(t.sana).toLocaleDateString('uz-UZ')}</span>
+                        {t.izoh && <span style={{ color: 'var(--text3)' }}>— {t.izoh}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="qarz-item-amount">
                 <div className="qarz-item-total amount-red">{formatSum(qarz.qolgan_summa)} {qarz.valyuta}</div>
@@ -322,9 +485,13 @@ export default function QarzdorDetail() {
                   </div>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <button className="btn btn-success btn-sm" onClick={() => setShowTolovModal(qarz)}>
                   ✅ To'lov
+                </button>
+                {/* ✅ YANGI: Muddat uzaytirish */}
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowMuddatModal(qarz)} title="Muddatni uzaytirish">
+                  📅 Muddat
                 </button>
                 <button className="btn btn-secondary btn-sm" onClick={() => printChek(qarz)} title="Chek chiqarish">
                   🖨️
@@ -346,7 +513,14 @@ export default function QarzdorDetail() {
           {paidQarzlar.map(qarz => (
             <div key={qarz.id} className="qarz-item" style={{ opacity: 0.6 }}>
               <div className="qarz-item-info">
-                <div className="qarz-item-sabab">{qarz.sabab || "Sabab ko'rsatilmagan"}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {qarz.qarz_raqam > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', background: 'rgba(99,102,241,0.1)', padding: '2px 7px', borderRadius: 6, fontFamily: 'monospace' }}>
+                      QRZ-{String(qarz.qarz_raqam).padStart(4, '0')}
+                    </span>
+                  )}
+                  <span className="qarz-item-sabab">{qarz.sabab || "Sabab ko'rsatilmagan"}</span>
+                </div>
                 <div className="qarz-item-date">{new Date(qarz.sana).toLocaleDateString('uz-UZ')}</div>
               </div>
               <div className="qarz-item-amount">
@@ -381,6 +555,14 @@ export default function QarzdorDetail() {
         <AddTolovModal qarzId={showTolovModal.id} qarzSumma={showTolovModal.qolgan_summa}
           onClose={() => setShowTolovModal(null)}
           onSuccess={() => { setShowTolovModal(null); load(); }} />
+      )}
+      {showMuddatModal && (
+        <MuddatModal
+          qarzId={showMuddatModal.id}
+          currentMuddat={showMuddatModal.muddat}
+          onClose={() => setShowMuddatModal(null)}
+          onSuccess={() => { setShowMuddatModal(null); load(); }}
+        />
       )}
     </div>
   );

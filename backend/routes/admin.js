@@ -75,14 +75,20 @@ router.get('/kirish-tarixi', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Admin: kirish tarixini tozalash (90 kundan eski)
-router.delete('/kirish-tarixi/eski', adminAuth, async (req, res) => {
+// ✅ YANGI: kirish tarixini tozalash — kunlar bo'yicha (raqam xavfsiz)
+router.delete('/kirish-tarixi/tozalash', adminAuth, async (req, res) => {
   try {
-    const days = parseInt(req.query.days) || 30;
+    const days = Math.max(1, Math.min(365, parseInt(req.query.days) || 30));
+    // SQL injection xavfsizligi uchun interpolatsiya emas, INTERVAL bilan parametr
     const result = await db.run_p(
-      `DELETE FROM kirish_tarixi WHERE created_at < NOW() - INTERVAL '${days} days'`
+      `DELETE FROM kirish_tarixi WHERE created_at < NOW() - ($1 || ' days')::INTERVAL`,
+      [days.toString()]
     );
-    res.json({ message: `${result.changes || 0} ta eski yozuv o'chirildi` });
+    res.json({
+      ok: true,
+      ochirildi: result.changes || 0,
+      message: `${days} kundan eski ${result.changes || 0} ta yozuv o'chirildi`
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

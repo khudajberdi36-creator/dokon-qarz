@@ -108,8 +108,8 @@ router.put('/:id', auth, async (req, res) => {
     if (!qarzdor) return res.status(404).json({ error: 'Topilmadi' });
 
     await db.run_p(
-      'UPDATE qarzdorlar SET ism=$1, familiya=$2, telefon=$3, telegram=$4, instagram=$5, whatsapp=$6, manzil=$7, izoh=$8 WHERE id=$9 AND user_id=$10',
-      [ism, familiya, telefon, telegram || null, instagram || null, whatsapp || null, manzil || null, izoh || null, req.params.id, req.user.id]
+      'UPDATE qarzdorlar SET ism=$1, familiya=$2, telefon=$3, telegram=$4, instagram=$5, whatsapp=$6, manzil=$7, izoh=$8, eslatma=$9 WHERE id=$10 AND user_id=$11',
+      [ism, familiya, telefon, telegram || null, instagram || null, whatsapp || null, manzil || null, izoh || null, req.body.eslatma || null, req.params.id, req.user.id]
     );
     res.json({ message: "Yangilandi" });
   } catch (err) {

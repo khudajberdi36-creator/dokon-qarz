@@ -3,11 +3,9 @@ const router = express.Router();
 const db = require('../database');
 const auth = require('../middleware/auth');
 
-
 // Asosiy statistika
 router.get('/', auth, async (req, res) => {
   try {
-    // ✅ TUZATILDI: destructuring o'rniga to'g'ridan-to'g'ri qiymat olish
     const r1 = await db.get_p('SELECT COUNT(*) as c FROM qarzdorlar WHERE user_id = $1', [req.user.id]);
     const r2 = await db.get_p("SELECT COALESCE(SUM(summa), 0) as total FROM qarzlar WHERE user_id = $1 AND status = 'active'", [req.user.id]);
     const r3 = await db.get_p(`
@@ -26,17 +24,36 @@ router.get('/', auth, async (req, res) => {
       WHERE user_id = $1 AND DATE(created_at) = CURRENT_DATE
     `, [req.user.id]);
 
+    // ✅ YANGI: Bugungi harakatlar
+    const bugun_tolov = await db.get_p(`
+      SELECT COUNT(*) as c FROM tolovlar t
+      JOIN qarzlar q ON t.qarz_id = q.id
+      WHERE q.user_id = $1 AND DATE(t.created_at) = CURRENT_DATE
+    `, [req.user.id]);
+    const bugun_qarzdor = await db.get_p(`
+      SELECT COUNT(*) as c FROM qarzdorlar
+      WHERE user_id = $1 AND DATE(created_at) = CURRENT_DATE
+    `, [req.user.id]);
+
     const jami_qarz = Number(r2.total);
     const tolov_qilingan = Number(r3.total);
+
+    // ✅ YANGI: To'lov foizi
+    const tolov_foizi = jami_qarz > 0
+      ? Math.round((tolov_qilingan / (jami_qarz + tolov_qilingan)) * 100)
+      : 0;
 
     res.json({
       jami_qarzdorlar: Number(r1.c),
       jami_qarz,
       tolov_qilingan,
-      // ✅ TUZATILDI: manfiy bo'lmasin
       qolgan_qarz: Math.max(0, jami_qarz - tolov_qilingan),
       muddati_otgan: Number(r4.c),
-      yangi_qarzlar: Number(r5.c)
+      yangi_qarzlar: Number(r5.c),
+      // ✅ YANGI maydonlar
+      bugun_tolovlar: Number(bugun_tolov.c),
+      bugun_qarzdorlar: Number(bugun_qarzdor.c),
+      tolov_foizi
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -72,7 +89,6 @@ router.get('/monthly', auth, async (req, res) => {
       ORDER BY oy_key
     `, [req.user.id]);
 
-    // Oylarni birlashtirish
     const oyMap = {};
     qarzlar.forEach(r => {
       oyMap[r.oy_key] = {
@@ -103,7 +119,9 @@ router.get('/top-qarzdorlar', auth, async (req, res) => {
   try {
     const rows = await db.all_p(`
       SELECT
+        q.id,
         q.ism || ' ' || COALESCE(q.familiya, '') AS ism,
+        q.telefon,
         GREATEST(0,
           COALESCE(SUM(qz.summa), 0) -
           COALESCE((
@@ -117,11 +135,31 @@ router.get('/top-qarzdorlar', auth, async (req, res) => {
         AND qz.user_id = $1
         AND qz.status = 'active'
       WHERE q.user_id = $1
-      GROUP BY q.id, q.ism, q.familiya
+      GROUP BY q.id, q.ism, q.familiya, q.telefon
       ORDER BY qarz DESC
       LIMIT 5
     `, [req.user.id]);
     res.json(rows.map(r => ({ ...r, qarz: Number(r.qarz) })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ YANGI: Qarz holati tarixi (har bir qarzning to'liq to'lov tarixi)
+router.get('/qarz-tarixi/:qarzdor_id', auth, async (req, res) => {
+  try {
+    const qarzlar = await db.all_p(`
+      SELECT qz.id, qz.summa, qz.sana, qz.muddat, qz.sabab, qz.status, qz.valyuta,
+        GREATEST(0, qz.summa - COALESCE((SELECT SUM(t.summa) FROM tolovlar t WHERE t.qarz_id = qz.id), 0)) as qolgan_summa,
+        (SELECT json_agg(
+          json_build_object('id', t.id, 'summa', t.summa, 'sana', t.sana, 'izoh', t.izoh, 'created_at', t.created_at)
+          ORDER BY t.sana DESC
+        ) FROM tolovlar t WHERE t.qarz_id = qz.id) as tolovlar
+      FROM qarzlar qz
+      WHERE qz.qarzdor_id = $1 AND qz.user_id = $2
+      ORDER BY qz.created_at DESC
+    `, [req.params.qarzdor_id, req.user.id]);
+    res.json(qarzlar);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

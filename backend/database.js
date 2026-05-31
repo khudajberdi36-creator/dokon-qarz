@@ -44,6 +44,7 @@ async function initDB() {
       whatsapp TEXT,
       manzil TEXT,
       izoh TEXT,
+      eslatma TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -57,6 +58,8 @@ async function initDB() {
       muddat DATE,
       sabab TEXT,
       status TEXT DEFAULT 'active',
+      mahsulot_id INTEGER,
+      qarz_raqam INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -86,6 +89,7 @@ async function initDB() {
       narx NUMERIC NOT NULL DEFAULT 0,
       miqdor NUMERIC NOT NULL DEFAULT 0,
       birlik TEXT DEFAULT 'dona',
+      ogohlantirish_chegara INTEGER DEFAULT 5,
       izoh TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -102,9 +106,14 @@ async function initDB() {
     );
   `);
 
+  // Yangi ustunlarni qo'shish (eski DB uchun)
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';`).catch(() => {});
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT 'Foydalanuvchi';`).catch(() => {});
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dokon_nomi TEXT DEFAULT 'Dokon';`).catch(() => {});
+  await pool.query(`ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS mahsulot_id INTEGER;`).catch(() => {});
+  await pool.query(`ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS qarz_raqam INTEGER DEFAULT 0;`).catch(() => {});
+  await pool.query(`ALTER TABLE qarzdorlar ADD COLUMN IF NOT EXISTS eslatma TEXT;`).catch(() => {});
+  await pool.query(`ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS ogohlantirish_chegara INTEGER DEFAULT 5;`).catch(() => {});
 
   console.log('✅ Database tayyor');
   await seedUsers();

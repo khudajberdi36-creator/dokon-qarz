@@ -122,3 +122,22 @@ router.get('/stats', auth, async (req, res) => {
 });
 
 module.exports = router;
+// ✅ YANGI: Kam qolgan mahsulotlar
+// (GET /api/mahsulotlar/ogohlantirish)
+router.get('/ogohlantirish', auth, async (req, res) => {
+  try {
+    const rows = await db.all_p(
+      `SELECT m.*, k.emoji, k.nomi as kategoriya_nomi
+       FROM mahsulotlar m
+       LEFT JOIN kategoriyalar k ON k.id = m.kategoriya_id
+       WHERE m.user_id = $1
+         AND m.miqdor <= m.ogohlantirish_chegara
+         AND m.ogohlantirish_chegara > 0
+       ORDER BY m.miqdor ASC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
