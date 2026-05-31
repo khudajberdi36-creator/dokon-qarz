@@ -1,70 +1,134 @@
-import React, { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
+const navItems = (role) => [
+  { to: '/', label: 'Dashboard', icon: '🏠', exact: true },
+  { to: '/qarzdorlar', label: 'Qarzdorlar', icon: '👥' },
+  { to: '/muddati-otgan', label: "Muddati o'tgan", icon: '⏰' },
+  { to: '/mahsulotlar', label: 'Mahsulotlar', icon: '📦' },
+  ...(role === 'admin' ? [
+    { to: '/admin', label: 'Admin', icon: '👑', isAdmin: true },
+    { to: '/kirish-tarixi', label: 'Kirish tarixi', icon: '🔐' },
+  ] : []),
+];
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [ripples, setRipples] = useState({});
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const navItems = [
-    { to: '/', label: '🏠 Dashboard', exact: true },
-    { to: '/qarzdorlar', label: '👥 Qarzdorlar' },
-    { to: '/muddati-otgan', label: '⏰ Muddati o\'tgan' },
-    { to: '/mahsulotlar', label: '📦 Mahsulotlar' },
-    ...(user?.role === 'admin' ? [
-      { to: '/admin', label: '👑 Admin' },
-      { to: '/kirish-tarixi', label: '🔐 Kirish tarixi' },
-    ] : []),
-  ];
+  const items = navItems(user?.role);
+
+  const handleNavClick = (to, e) => {
+    setSidebarOpen(false);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setRipples(prev => ({ ...prev, [to]: { x, y, id: Date.now() } }));
+    setTimeout(() => setRipples(prev => { const n = {...prev}; delete n[to]; return n; }), 600);
+  };
 
   return (
     <div className="app-layout">
+      {/* Overlay */}
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
-        <div className="sidebar-header">
-          <div className="logo">🏪 Do'kon Qarz</div>
-          <div className="user-info">
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{user?.full_name}</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{user?.dokon_nomi}</div>
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="brand-icon">🏪</div>
+          <div className="brand-text">
+            <span className="brand-name">Do'kon Qarz</span>
+            <span className="brand-sub">Boshqaruv tizimi</span>
           </div>
         </div>
+
+        <div className="sidebar-user">
+          <div className="user-avatar-sidebar">
+            {user?.full_name?.[0]?.toUpperCase() || 'U'}
+          </div>
+          <div className="user-info-sidebar">
+            <span className="user-name-sidebar">{user?.full_name}</span>
+            <span className="user-shop-sidebar">{user?.dokon_nomi}</span>
+          </div>
+          {user?.role === 'admin' && (
+            <span className="role-crown" title="Admin">👑</span>
+          )}
+        </div>
+
+        <div className="sidebar-divider" />
+
         <nav className="sidebar-nav">
-          {navItems.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.exact}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          <span className="nav-section-label">MENYU</span>
+          {items.map((item) => {
+            const isActive = item.exact
+              ? location.pathname === item.to
+              : location.pathname.startsWith(item.to);
+            const ripple = ripples[item.to];
+
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.exact}
+                className={`nav-btn ${isActive ? 'nav-btn--active' : ''} ${item.isAdmin ? 'nav-btn--admin' : ''}`}
+                onClick={(e) => handleNavClick(item.to, e)}
+              >
+                <span className="nav-btn-icon">{item.icon}</span>
+                <span className="nav-btn-label">{item.label}</span>
+                {isActive && <span className="nav-btn-dot" />}
+                {ripple && (
+                  <span
+                    key={ripple.id}
+                    className="nav-ripple"
+                    style={{ left: ripple.x, top: ripple.y }}
+                  />
+                )}
+              </NavLink>
+            );
+          })}
         </nav>
-        <div className="sidebar-footer">
-          <button className="btn btn-danger" style={{ width: '100%' }} onClick={handleLogout}>
-            🚪 Chiqish
+
+        <div className="sidebar-bottom">
+          <div className="sidebar-divider" />
+          <button className="logout-btn" onClick={handleLogout}>
+            <span>🚪</span>
+            <span>Chiqish</span>
           </button>
         </div>
       </aside>
 
-      {menuOpen && <div className="overlay" onClick={() => setMenuOpen(false)} />}
-
       {/* Main */}
       <main className="main-content">
-        <div className="topbar">
-          <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 13, color: 'var(--text2)' }}>@{user?.username}</span>
-            {user?.role === 'admin' && <span className="badge badge-red">👑 Admin</span>}
+        <header className="topbar">
+          <button
+            className="hamburger-btn"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Menyuni ochish"
+          >
+            <span className={`hamburger-line ${sidebarOpen ? 'hamburger-line--top-open' : ''}`} />
+            <span className={`hamburger-line ${sidebarOpen ? 'hamburger-line--mid-hide' : ''}`} />
+            <span className={`hamburger-line ${sidebarOpen ? 'hamburger-line--bot-open' : ''}`} />
+          </button>
+
+          <div className="topbar-right">
+            <span className="topbar-username">@{user?.username}</span>
+            {user?.role === 'admin' && (
+              <span className="badge badge-red">👑 Admin</span>
+            )}
           </div>
-        </div>
+        </header>
+
         <div className="page-content">
           <Outlet />
         </div>

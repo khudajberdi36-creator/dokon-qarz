@@ -714,3 +714,404 @@ tbody td {
 .info-item { }
 .info-item label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 3px; }
 .info-item span { font-size: 13px; font-weight: 500; }
+
+/* =========================================
+   YANGI SIDEBAR TUGMALAR (nav-btn style)
+   ========================================= */
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
+  z-index: 99;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* SIDEBAR brand */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px 18px;
+}
+
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 4px 16px var(--accent-glow);
+  flex-shrink: 0;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.brand-sub {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+/* USER CARD in sidebar */
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 12px 4px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.user-avatar-sidebar {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  color: white;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-info-sidebar {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name-sidebar {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-shop-sidebar {
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-crown {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* DIVIDER */
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 12px;
+}
+
+/* SECTION LABEL */
+.nav-section-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text3);
+  padding: 2px 16px 8px;
+  text-transform: uppercase;
+}
+
+/* SIDEBAR NAV */
+.sidebar-nav {
+  flex: 1;
+  padding: 0 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* =====================
+   NAV BUTTON — ASOSIY
+   ===================== */
+.nav-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.12s ease,
+    box-shadow 0.18s ease;
+  overflow: hidden;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-btn:hover {
+  background: var(--bg3);
+  color: var(--text);
+  transform: translateX(2px);
+}
+
+.nav-btn:active {
+  transform: translateX(2px) scale(0.98);
+}
+
+/* ACTIVE state */
+.nav-btn--active {
+  background: linear-gradient(135deg, rgba(108, 99, 255, 0.18), rgba(139, 133, 255, 0.08));
+  color: var(--accent2);
+  border: 1px solid rgba(108, 99, 255, 0.2);
+  box-shadow: 0 2px 12px rgba(108, 99, 255, 0.15);
+}
+
+.nav-btn--active:hover {
+  background: linear-gradient(135deg, rgba(108, 99, 255, 0.24), rgba(139, 133, 255, 0.12));
+  transform: translateX(2px);
+}
+
+/* ADMIN nav special */
+.nav-btn--admin.nav-btn--active {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(234, 179, 8, 0.06));
+  color: var(--yellow);
+  border-color: rgba(234, 179, 8, 0.25);
+  box-shadow: 0 2px 12px rgba(234, 179, 8, 0.12);
+}
+
+.nav-btn--admin:hover {
+  color: var(--yellow);
+}
+
+/* Icon */
+.nav-btn-icon {
+  font-size: 17px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.nav-btn:hover .nav-btn-icon {
+  transform: scale(1.15);
+}
+
+.nav-btn--active .nav-btn-icon {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+/* Label */
+.nav-btn-label {
+  flex: 1;
+  line-height: 1;
+}
+
+/* Active dot */
+.nav-btn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent2);
+  animation: dotPulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* RIPPLE effect */
+.nav-ripple {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent2);
+  opacity: 0.5;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
+  animation: rippleAnim 0.55s ease-out forwards;
+}
+
+@keyframes rippleAnim {
+  to {
+    transform: translate(-50%, -50%) scale(40);
+    opacity: 0;
+  }
+}
+
+/* SIDEBAR BOTTOM */
+.sidebar-bottom {
+  padding: 0 0 12px;
+}
+
+/* LOGOUT BUTTON */
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 20px);
+  margin: 0 10px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.logout-btn:hover {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+}
+
+.logout-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* HAMBURGER */
+.hamburger-btn {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  border-radius: 9px;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.hamburger-btn:hover {
+  background: var(--bg4);
+  border-color: var(--accent);
+}
+
+.hamburger-line {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--text2);
+  border-radius: 2px;
+  transition: all 0.25s ease;
+  transform-origin: center;
+}
+
+.hamburger-line--top-open {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.hamburger-line--mid-hide {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.hamburger-line--bot-open {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* TOPBAR */
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-username {
+  font-size: 13px;
+  color: var(--text2);
+}
+
+/* MAIN CONTENT */
+.main-content {
+  margin-left: 260px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .main-content { margin-left: 0; }
+  .hamburger-btn { display: flex; }
+
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar--open {
+    transform: translateX(0);
+    box-shadow: 4px 0 40px rgba(0,0,0,0.5);
+  }
+}
+
+@media (min-width: 769px) {
+  .sidebar {
+    transform: none !important;
+  }
+}
+
+/* Sidebar entry animation on desktop */
+@media (prefers-reduced-motion: no-preference) {
+  .nav-btn {
+    animation: none;
+  }
+}
