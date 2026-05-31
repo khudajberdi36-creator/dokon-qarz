@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../database');
 const auth = require('../middleware/auth');
 
+
 // Asosiy statistika
 router.get('/', auth, async (req, res) => {
   try {
