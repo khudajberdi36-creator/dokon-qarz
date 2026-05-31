@@ -21,9 +21,9 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
   const handleMahsulot = (e) => {
     const m = mahsulotlar.find(m => String(m.id) === e.target.value);
     if (m) {
-      setForm(f => ({ ...f, mahsulot_id: m.id, summa: String(m.narx), sabab: m.nomi }));
+      setForm(f => ({ ...f, mahsulot_id: m.id, summa: String(m.narx), sabab: m.nomi, mahsulot_miqdor: 1, _mahsulot: m }));
     } else {
-      setForm(f => ({ ...f, mahsulot_id: null }));
+      setForm(f => ({ ...f, mahsulot_id: null, mahsulot_miqdor: '', _mahsulot: null }));
     }
   };
 
@@ -32,7 +32,7 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
     if (!form.summa) return setError("Summa kiritilmadi");
     setLoading(true);
     try {
-      await axios.post('/api/qarzlar', { ...form, qarzdor_id: qarzdorId, summa: Number(form.summa) });
+      await axios.post('/api/qarzlar', { ...form, qarzdor_id: qarzdorId, summa: Number(form.summa), mahsulot_miqdor: Number(form.mahsulot_miqdor) || 1 });
       onSuccess();
     } catch (err) {
       setError(err.response?.data?.error || "Xatolik");

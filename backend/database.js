@@ -95,6 +95,18 @@ async function initDB() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS naxt_sotuvlar (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      mahsulot_id INTEGER REFERENCES mahsulotlar(id) ON DELETE SET NULL,
+      miqdor NUMERIC NOT NULL DEFAULT 1,
+      narx NUMERIC NOT NULL DEFAULT 0,
+      jami_summa NUMERIC NOT NULL DEFAULT 0,
+      sana DATE NOT NULL,
+      izoh TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS kirish_tarixi (
       id SERIAL PRIMARY KEY,
       user_id INTEGER,

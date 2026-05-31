@@ -28,7 +28,7 @@ router.get('/muddati-otgan', auth, async (req, res) => {
 // Yangi qarz qo'shish
 router.post('/', auth, async (req, res) => {
   try {
-    const { qarzdor_id, summa, valyuta, sana, muddat, sabab, mahsulot_id } = req.body;
+    const { qarzdor_id, summa, valyuta, sana, muddat, sabab, mahsulot_id, mahsulot_miqdor } = req.body;
     if (!qarzdor_id || !summa || !sana)
       return res.status(400).json({ error: "Majburiy maydonlar to'ldirilmagan" });
     if (Number(summa) <= 0)
@@ -37,7 +37,7 @@ router.post('/', auth, async (req, res) => {
     const qarzdor = await db.get_p('SELECT id FROM qarzdorlar WHERE id = $1 AND user_id = $2', [qarzdor_id, req.user.id]);
     if (!qarzdor) return res.status(403).json({ error: "Ruxsat yo'q" });
 
-    // ✅ YANGI: Qarz raqami (QRZ-0001 formatida)
+    // ✅ Qarz raqami (QRZ-0001 formatida)
     const lastNum = await db.get_p('SELECT MAX(qarz_raqam) as mx FROM qarzlar WHERE user_id=$1', [req.user.id]);
     const nextNum = (Number(lastNum?.mx) || 0) + 1;
 
@@ -46,15 +46,73 @@ router.post('/', auth, async (req, res) => {
       [qarzdor_id, req.user.id, summa, valyuta || 'UZS', sana, muddat || null, sabab, mahsulot_id || null, nextNum]
     );
 
-    // ✅ YANGI: Mahsulot miqdorini kamaytirish
+    // ✅ Mahsulot miqdorini kamaytirish (qancha miqdor berilgan bo'lsa shuncha)
     if (mahsulot_id) {
+      const miqdorKamaytir = Number(mahsulot_miqdor) > 0 ? Number(mahsulot_miqdor) : 1;
       await db.run_p(
-        'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - 1) WHERE id=$1 AND user_id=$2',
-        [mahsulot_id, req.user.id]
+        'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1) WHERE id=$2 AND user_id=$3',
+        [miqdorKamaytir, mahsulot_id, req.user.id]
       );
     }
 
     res.json({ id: result.lastID, qarz_raqam: `QRZ-${String(nextNum).padStart(4, '0')}`, message: "Qarz qo'shildi" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ YANGI: Naxt sotish (qarz emas, faqat mahsulot chiqarish + kassa yozuvi)
+router.post('/naxt-sotuv', auth, async (req, res) => {
+  try {
+    const { mahsulot_id, miqdor, narx, sana, izoh } = req.body;
+    if (!mahsulot_id || !miqdor || miqdor <= 0)
+      return res.status(400).json({ error: "Mahsulot va miqdor kerak" });
+
+    const mahsulot = await db.get_p('SELECT * FROM mahsulotlar WHERE id=$1 AND user_id=$2', [mahsulot_id, req.user.id]);
+    if (!mahsulot) return res.status(404).json({ error: "Mahsulot topilmadi" });
+    if (Number(mahsulot.miqdor) < Number(miqdor))
+      return res.status(400).json({ error: `Mahsulot yetarli emas! Mavjud: ${mahsulot.miqdor} ${mahsulot.birlik}` });
+
+    const sotuvNarx = narx ? Number(narx) : Number(mahsulot.narx);
+    const jami = sotuvNarx * Number(miqdor);
+
+    // Miqdorni kamaytir
+    await db.run_p(
+      'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1) WHERE id=$2 AND user_id=$3',
+      [miqdor, mahsulot_id, req.user.id]
+    );
+
+    // Naxt sotuv jadvaliga yozuv
+    await db.run_p(
+      `INSERT INTO naxt_sotuvlar (user_id, mahsulot_id, miqdor, narx, jami_summa, sana, izoh)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [req.user.id, mahsulot_id, miqdor, sotuvNarx, jami, sana || new Date().toISOString().split('T')[0], izoh || '']
+    );
+
+    res.json({ message: "Sotuv amalga oshirildi", jami, mahsulot_nomi: mahsulot.nomi });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ YANGI: Naxt sotuvlar tarixi
+router.get('/naxt-sotuvlar', auth, async (req, res) => {
+  try {
+    const { sana } = req.query;
+    let query = `
+      SELECT ns.*, m.nomi as mahsulot_nomi, m.birlik, m.emoji
+      FROM naxt_sotuvlar ns
+      JOIN mahsulotlar m ON ns.mahsulot_id = m.id
+      WHERE ns.user_id = $1
+    `;
+    const params = [req.user.id];
+    if (sana) {
+      params.push(sana);
+      query += ` AND ns.sana = $${params.length}`;
+    }
+    query += ' ORDER BY ns.created_at DESC LIMIT 100';
+    const rows = await db.all_p(query, params);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -100,7 +158,7 @@ router.put('/:id/close', auth, async (req, res) => {
   }
 });
 
-// ✅ YANGI: Muddatni uzaytirish
+// ✅ Muddatni uzaytirish
 router.put('/:id/muddat', auth, async (req, res) => {
   try {
     const { yangi_muddat, sabab } = req.body;

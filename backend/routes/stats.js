@@ -24,7 +24,6 @@ router.get('/', auth, async (req, res) => {
       WHERE user_id = $1 AND DATE(created_at) = CURRENT_DATE
     `, [req.user.id]);
 
-    // ✅ YANGI: Bugungi harakatlar
     const bugun_tolov = await db.get_p(`
       SELECT COUNT(*) as c FROM tolovlar t
       JOIN qarzlar q ON t.qarz_id = q.id
@@ -35,10 +34,15 @@ router.get('/', auth, async (req, res) => {
       WHERE user_id = $1 AND DATE(created_at) = CURRENT_DATE
     `, [req.user.id]);
 
+    // ✅ Bugungi naxt tushumlar
+    const bugun_naxt = await db.get_p(`
+      SELECT COALESCE(SUM(jami_summa), 0) as jami, COUNT(*) as soni
+      FROM naxt_sotuvlar
+      WHERE user_id = $1 AND sana = CURRENT_DATE
+    `, [req.user.id]).catch(() => ({ jami: 0, soni: 0 }));
+
     const jami_qarz = Number(r2.total);
     const tolov_qilingan = Number(r3.total);
-
-    // ✅ YANGI: To'lov foizi
     const tolov_foizi = jami_qarz > 0
       ? Math.round((tolov_qilingan / (jami_qarz + tolov_qilingan)) * 100)
       : 0;
@@ -50,17 +54,18 @@ router.get('/', auth, async (req, res) => {
       qolgan_qarz: Math.max(0, jami_qarz - tolov_qilingan),
       muddati_otgan: Number(r4.c),
       yangi_qarzlar: Number(r5.c),
-      // ✅ YANGI maydonlar
       bugun_tolovlar: Number(bugun_tolov.c),
       bugun_qarzdorlar: Number(bugun_qarzdor.c),
-      tolov_foizi
+      tolov_foizi,
+      bugun_naxt_tushum: Number(bugun_naxt?.jami || 0),
+      bugun_naxt_soni: Number(bugun_naxt?.soni || 0),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Oylik statistika (grafik uchun) - oxirgi 6 oy
+// Oylik statistika
 router.get('/monthly', auth, async (req, res) => {
   try {
     const qarzlar = await db.all_p(`
@@ -91,13 +96,7 @@ router.get('/monthly', auth, async (req, res) => {
 
     const oyMap = {};
     qarzlar.forEach(r => {
-      oyMap[r.oy_key] = {
-        oy: r.oy,
-        oy_key: r.oy_key,
-        qarz: Number(r.qarz_summa),
-        tolov: 0,
-        soni: Number(r.qarz_soni)
-      };
+      oyMap[r.oy_key] = { oy: r.oy, oy_key: r.oy_key, qarz: Number(r.qarz_summa), tolov: 0, soni: Number(r.qarz_soni) };
     });
     tolovlar.forEach(r => {
       if (oyMap[r.oy_key]) {
@@ -145,7 +144,65 @@ router.get('/top-qarzdorlar', auth, async (req, res) => {
   }
 });
 
-// ✅ YANGI: Qarz holati tarixi (har bir qarzning to'liq to'lov tarixi)
+// ✅ YANGI: Eng ko'p sotiladigan mahsulotlar (naxt + qarz orqali)
+router.get('/top-mahsulotlar', auth, async (req, res) => {
+  try {
+    const { davr } = req.query; // 'bugun', 'hafta', 'oy'
+    let intervalStr = "INTERVAL '30 days'";
+    if (davr === 'bugun') intervalStr = "INTERVAL '1 day'";
+    else if (davr === 'hafta') intervalStr = "INTERVAL '7 days'";
+
+    // Naxt sotuvlardan
+    const naxtRows = await db.all_p(`
+      SELECT
+        m.id, m.nomi, m.birlik, m.emoji,
+        SUM(ns.miqdor) as jami_miqdor,
+        SUM(ns.jami_summa) as jami_summa,
+        COUNT(*) as sotuv_soni
+      FROM naxt_sotuvlar ns
+      JOIN mahsulotlar m ON ns.mahsulot_id = m.id
+      WHERE ns.user_id = $1
+        AND ns.created_at >= CURRENT_TIMESTAMP - ${intervalStr}
+      GROUP BY m.id, m.nomi, m.birlik, m.emoji
+    `, [req.user.id]).catch(() => []);
+
+    // Qarz orqali berilganlardan
+    const qarzRows = await db.all_p(`
+      SELECT
+        m.id, m.nomi, m.birlik, m.emoji,
+        COUNT(qz.id) as sotuv_soni,
+        COUNT(qz.id) as jami_miqdor,
+        SUM(qz.summa) as jami_summa
+      FROM qarzlar qz
+      JOIN mahsulotlar m ON qz.mahsulot_id = m.id
+      WHERE qz.user_id = $1
+        AND qz.created_at >= CURRENT_TIMESTAMP - ${intervalStr}
+      GROUP BY m.id, m.nomi, m.birlik, m.emoji
+    `, [req.user.id]).catch(() => []);
+
+    // Birlashtirish
+    const map = {};
+    naxtRows.forEach(r => {
+      map[r.id] = { id: r.id, nomi: r.nomi, birlik: r.birlik, emoji: r.emoji, jami_miqdor: Number(r.jami_miqdor), jami_summa: Number(r.jami_summa), sotuv_soni: Number(r.sotuv_soni) };
+    });
+    qarzRows.forEach(r => {
+      if (map[r.id]) {
+        map[r.id].jami_miqdor += Number(r.jami_miqdor);
+        map[r.id].jami_summa += Number(r.jami_summa);
+        map[r.id].sotuv_soni += Number(r.sotuv_soni);
+      } else {
+        map[r.id] = { id: r.id, nomi: r.nomi, birlik: r.birlik, emoji: r.emoji, jami_miqdor: Number(r.jami_miqdor), jami_summa: Number(r.jami_summa), sotuv_soni: Number(r.sotuv_soni) };
+      }
+    });
+
+    const result = Object.values(map).sort((a, b) => b.jami_miqdor - a.jami_miqdor).slice(0, 10);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Qarz holati tarixi
 router.get('/qarz-tarixi/:qarzdor_id', auth, async (req, res) => {
   try {
     const qarzlar = await db.all_p(`

@@ -29,6 +29,7 @@ export default function Dashboard() {
   const [allQarzdorlar, setAllQarzdorlar] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [topQarzdorlar, setTopQarzdorlar] = useState([]);
+  const [topMahsulotlar, setTopMahsulotlar] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -40,12 +41,14 @@ export default function Dashboard() {
       axios.get('/api/qarzdorlar'),
       axios.get('/api/stats/monthly'),
       axios.get('/api/stats/top-qarzdorlar'),
-    ]).then(([s, o, qd, monthly, top]) => {
+      axios.get('/api/stats/top-mahsulotlar?davr=bugun'),
+    ]).then(([s, o, qd, monthly, top, topM]) => {
       setStats(s.data);
       setOverdue(o.data.slice(0, 5));
       setAllQarzdorlar(qd.data);
       setMonthlyData(monthly.data);
       setTopQarzdorlar(top.data);
+      setTopMahsulotlar(topM.data || []);
     }).catch(err => {
       console.error('Dashboard load xatosi:', err);
     }).finally(() => setLoading(false));
@@ -99,6 +102,11 @@ export default function Dashboard() {
           <div className="stat-icon">⚠️</div>
           <div className="stat-label">Muddati o'tgan</div>
           <div className="stat-value">{stats?.muddati_otgan || 0}</div>
+        </div>
+        <div className="stat-card green">
+          <div className="stat-icon">💵</div>
+          <div className="stat-label">Bugungi tushum</div>
+          <div className="stat-value" style={{ fontSize: 16 }}>{formatSum(stats?.bugun_naxt_tushum)} so'm</div>
         </div>
       </div>
 
@@ -303,12 +311,56 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ✅ YANGI: Eng tez sotiladigan mahsulotlar */}
+      {topMahsulotlar.length > 0 && (
+        <div className="table-card" style={{ marginTop: 16 }}>
+          <div className="table-header">
+            <h3>🔥 Bugun eng ko'p sotiladigan mahsulotlar</h3>
+            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/naxt-sotuv')}>
+              💵 Naxt sotuv
+            </button>
+          </div>
+          <div style={{ padding: '0 4px 8px' }}>
+            {topMahsulotlar.map((m, i) => {
+              const maxMiq = topMahsulotlar[0]?.jami_miqdor || 1;
+              const foiz = Math.round((m.jami_miqdor / maxMiq) * 100);
+              const colors = ['#ef4444', '#f59e0b', '#6366f1', '#10b981', '#8b5cf6'];
+              return (
+                <div key={m.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
+                  borderBottom: i < topMahsulotlar.length - 1 ? '1px solid var(--border)' : 'none'
+                }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: colors[i % 5], display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontWeight: 800, color: 'white', fontSize: 12, flexShrink: 0
+                  }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>{m.nomi}</div>
+                    <div style={{ background: 'var(--bg)', borderRadius: 20, height: 5, overflow: 'hidden' }}>
+                      <div style={{ width: foiz + '%', height: '100%', background: colors[i % 5], borderRadius: 20 }} />
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontWeight: 800, color: colors[i % 5], fontSize: 14 }}>{m.jami_miqdor} {m.birlik}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatSum(m.jami_summa)} so'm</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <button className="btn btn-primary" onClick={() => navigate('/qarzdorlar/yangi')}>
           ➕ Yangi qarzdor qo'shish
         </button>
         <button className="btn btn-secondary" onClick={() => navigate('/qarzdorlar')}>
           👥 Barcha qarzdorlar
+        </button>
+        <button className="btn btn-secondary" onClick={() => navigate('/naxt-sotuv')}>
+          💵 Naxt sotuv
         </button>
         {stats?.muddati_otgan > 0 && (
           <button className="btn btn-danger" onClick={() => navigate('/muddati-otgan')}>
