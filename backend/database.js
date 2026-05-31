@@ -1,7 +1,5 @@
 const { Pool } = require('pg');
 
-// ✅ Supabase yoki oddiy PostgreSQL ishlaydi
-// Supabase: Settings -> Database -> Connection string -> URI ni DATABASE_URL ga qo'ying
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -9,17 +7,14 @@ const pool = new Pool({
 
 const db = {
   query: (text, params) => pool.query(text, params),
-
   get_p: async (text, params = []) => {
     const res = await pool.query(text, params);
     return res.rows[0] || null;
   },
-
   all_p: async (text, params = []) => {
     const res = await pool.query(text, params);
     return res.rows;
   },
-
   run_p: async (text, params = []) => {
     const res = await pool.query(text, params);
     return { lastID: res.rows[0]?.id, changes: res.rowCount, rows: res.rows };
@@ -32,8 +27,8 @@ async function initDB() {
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
-      full_name TEXT NOT NULL,
-      dokon_nomi TEXT NOT NULL,
+      full_name TEXT NOT NULL DEFAULT 'Foydalanuvchi',
+      dokon_nomi TEXT NOT NULL DEFAULT 'Dokon',
       role TEXT DEFAULT 'user',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -73,22 +68,50 @@ async function initDB() {
       izoh TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS kategoriyalar (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      nomi TEXT NOT NULL,
+      rang TEXT DEFAULT '#6366f1',
+      emoji TEXT DEFAULT '📦',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS mahsulotlar (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kategoriya_id INTEGER REFERENCES kategoriyalar(id) ON DELETE SET NULL,
+      nomi TEXT NOT NULL,
+      narx NUMERIC NOT NULL DEFAULT 0,
+      miqdor NUMERIC NOT NULL DEFAULT 0,
+      birlik TEXT DEFAULT 'dona',
+      izoh TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS kirish_tarixi (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER,
+      username TEXT,
+      ip_manzil TEXT,
+      user_agent TEXT,
+      status TEXT DEFAULT 'muvaffaqiyatli',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  // role ustunini qo'shish (eski DB lar uchun)
-  await pool.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
-  `).catch(() => {});
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';`).catch(() => {});
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT 'Foydalanuvchi';`).catch(() => {});
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dokon_nomi TEXT DEFAULT 'Dokon';`).catch(() => {});
 
   console.log('✅ Database tayyor');
-
-  // Boshlang'ich foydalanuvchilarni yaratish
   await seedUsers();
 }
 
 async function seedUsers() {
   const bcrypt = require('bcryptjs');
-
   const defaultUsers = [
     {
       username: process.env.USER1_LOGIN || 'begzod',
@@ -115,15 +138,6 @@ async function seedUsers() {
         [u.username, hash, u.full_name, u.dokon_nomi, u.role]
       );
       console.log(`✅ Foydalanuvchi yaratildi: ${u.username}`);
-    } else {
-      // Mavjud foydalanuvchi parolini tekshirish - agar hali hash bo'lmagan bo'lsa hash qilish
-      const user = await db.get_p('SELECT password FROM users WHERE username = $1', [u.username]);
-      const isHashed = user.password.startsWith('$2');
-      if (!isHashed) {
-        const hash = await bcrypt.hash(user.password, 10);
-        await pool.query('UPDATE users SET password = $1 WHERE username = $2', [hash, u.username]);
-        console.log(`🔐 Parol xavfsiz qilindi: ${u.username}`);
-      }
     }
   }
 }

@@ -1,107 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
-
-const icons = {
-  dashboard: '📊',
-  people: '👥',
-  warning: '⏰',
-  logout: '🚪',
-  menu: '☰',
-  store: '🏪',
-};
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [overdueCount, setOverdueCount] = useState(0);
-
-  useEffect(() => {
-    axios.get('/api/qarzlar/muddati-otgan').then(r => setOverdueCount(r.data.length)).catch(() => {});
-  }, []);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
+  const navItems = [
+    { to: '/', label: '🏠 Dashboard', exact: true },
+    { to: '/qarzdorlar', label: '👥 Qarzdorlar' },
+    { to: '/muddati-otgan', label: '⏰ Muddati o\'tgan' },
+    { to: '/mahsulotlar', label: '📦 Mahsulotlar' },
+    ...(user?.role === 'admin' ? [
+      { to: '/admin', label: '👑 Admin' },
+      { to: '/kirish-tarixi', label: '🔐 Kirish tarixi' },
+    ] : []),
+  ];
+
   return (
-    <div className="layout">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: '#00000060', zIndex: 99 }}
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="sidebar-logo">
-          <div className="logo-icon">🏪</div>
-          <h2>{user?.dokon_nomi || "Do'konim"}</h2>
-          <p>Qarz boshqaruv tizimi</p>
-        </div>
-
-        <nav className="sidebar-nav">
-          <div className="nav-label">Asosiy</div>
-          <NavLink to="/" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-            <span>📊</span> Dashboard
-          </NavLink>
-          <NavLink to="/qarzdorlar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-            <span>👥</span> Qarzdorlar
-          </NavLink>
-          <NavLink to="/muddati-otgan" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-            <span>⏰</span> Muddati o'tgan
-            {overdueCount > 0 && <span className="badge">{overdueCount}</span>}
-          </NavLink>
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="user-card">
-            <div className="user-avatar">
-              {(user?.full_name || user?.username || 'A')[0].toUpperCase()}
-            </div>
-            <div className="user-card-info">
-              <h4>{user?.full_name || user?.username}</h4>
-              <p>Do'kon egasi</p>
-            </div>
+    <div className="app-layout">
+      {/* Sidebar */}
+      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <div className="logo">🏪 Do'kon Qarz</div>
+          <div className="user-info">
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{user?.full_name}</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>{user?.dokon_nomi}</div>
           </div>
-          <button className="nav-item" style={{ marginTop: 8, color: 'var(--red)' }} onClick={handleLogout}>
-            <span>🚪</span> Chiqish
+        </div>
+        <nav className="sidebar-nav">
+          {navItems.map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.exact}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              onClick={() => setMenuOpen(false)}
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <button className="btn btn-danger" style={{ width: '100%' }} onClick={handleLogout}>
+            🚪 Chiqish
           </button>
         </div>
       </aside>
 
-      <main className="main">
+      {menuOpen && <div className="overlay" onClick={() => setMenuOpen(false)} />}
+
+      {/* Main */}
+      <main className="main-content">
         <div className="topbar">
-          <div className="topbar-title">
-            <h1>{user?.dokon_nomi || "Do'kon Qarz"}</h1>
-            <p>Salom, {user?.full_name}! 👋</p>
-          </div>
-          <div className="topbar-actions">
-            <button
-              className="btn btn-secondary"
-              style={{ display: 'none' }}
-              id="sidebar-toggle"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              ☰
-            </button>
+          <button className="menu-btn" onClick={() => setMenuOpen(!menuOpen)}>☰</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, color: 'var(--text2)' }}>@{user?.username}</span>
+            {user?.role === 'admin' && <span className="badge badge-red">👑 Admin</span>}
           </div>
         </div>
-
         <div className="page-content">
           <Outlet />
         </div>
       </main>
-
-      <style>{`
-        @media (max-width: 768px) {
-          #sidebar-toggle { display: flex !important; }
-        }
-      `}</style>
     </div>
   );
 }
