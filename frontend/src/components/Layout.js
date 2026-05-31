@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Avatar from './Avatar';
 
-const navItems = (role) => [
-  { to: '/', label: 'Dashboard', icon: '🏠', exact: true },
-  { to: '/qarzdorlar', label: 'Qarzdorlar', icon: '👥' },
-  { to: '/muddati-otgan', label: "Muddati o'tgan", icon: '⏰' },
-  { to: '/mahsulotlar', label: 'Mahsulotlar', icon: '📦' },
+const getNavItems = (role) => [
+  { to: '/',               label: 'Dashboard',        icon: '🗂️', exact: true },
+  { to: '/qarzdorlar',     label: 'Qarzdorlar',        icon: '🧾' },
+  { to: '/muddati-otgan',  label: "Muddati o'tgan",   icon: '⚠️' },
+  { to: '/mahsulotlar',    label: 'Mahsulotlar',       icon: '🛒' },
   ...(role === 'admin' ? [
-    { to: '/admin', label: 'Admin', icon: '👑', isAdmin: true },
-    { to: '/kirish-tarixi', label: 'Kirish tarixi', icon: '🔐' },
+    { to: '/admin',          label: 'Admin',            icon: '👑', isAdmin: true },
+    { to: '/kirish-tarixi',  label: 'Kirish tarixi',   icon: '🛡️' },
   ] : []),
 ];
 
@@ -20,31 +21,23 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [ripples, setRipples] = useState({});
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const items = navItems(user?.role);
+  const handleLogout = () => { logout(); navigate('/login'); };
+  const items = getNavItems(user?.role);
 
   const handleNavClick = (to, e) => {
     setSidebarOpen(false);
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setRipples(prev => ({ ...prev, [to]: { x, y, id: Date.now() } }));
-    setTimeout(() => setRipples(prev => { const n = {...prev}; delete n[to]; return n; }), 600);
+    const rpl = { x: e.clientX - rect.left, y: e.clientY - rect.top, id: Date.now() };
+    setRipples(prev => ({ ...prev, [to]: rpl }));
+    setTimeout(() => setRipples(prev => { const n = { ...prev }; delete n[to]; return n; }), 600);
   };
 
   return (
     <div className="app-layout">
-      {/* Overlay */}
-      {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-      )}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
+        {/* Brand */}
         <div className="sidebar-brand">
           <div className="brand-icon">🏪</div>
           <div className="brand-text">
@@ -53,29 +46,26 @@ export default function Layout() {
           </div>
         </div>
 
+        {/* User card */}
         <div className="sidebar-user">
-          <div className="user-avatar-sidebar">
-            {user?.full_name?.[0]?.toUpperCase() || 'U'}
-          </div>
+          <Avatar name={user?.full_name} size={34} radius={9} fontSize={13} />
           <div className="user-info-sidebar">
             <span className="user-name-sidebar">{user?.full_name}</span>
             <span className="user-shop-sidebar">{user?.dokon_nomi}</span>
           </div>
-          {user?.role === 'admin' && (
-            <span className="role-crown" title="Admin">👑</span>
-          )}
+          {user?.role === 'admin' && <span style={{ fontSize: 14 }} title="Admin">👑</span>}
         </div>
 
         <div className="sidebar-divider" />
 
+        {/* Nav */}
         <nav className="sidebar-nav">
-          <span className="nav-section-label">MENYU</span>
+          <span className="nav-section-label">Menyu</span>
           {items.map((item) => {
             const isActive = item.exact
               ? location.pathname === item.to
               : location.pathname.startsWith(item.to);
             const ripple = ripples[item.to];
-
             return (
               <NavLink
                 key={item.to}
@@ -88,11 +78,8 @@ export default function Layout() {
                 <span className="nav-btn-label">{item.label}</span>
                 {isActive && <span className="nav-btn-dot" />}
                 {ripple && (
-                  <span
-                    key={ripple.id}
-                    className="nav-ripple"
-                    style={{ left: ripple.x, top: ripple.y }}
-                  />
+                  <span key={ripple.id} className="nav-ripple"
+                    style={{ left: ripple.x, top: ripple.y }} />
                 )}
               </NavLink>
             );
@@ -102,33 +89,27 @@ export default function Layout() {
         <div className="sidebar-bottom">
           <div className="sidebar-divider" />
           <button className="logout-btn" onClick={handleLogout}>
-            <span>🚪</span>
-            <span>Chiqish</span>
+            <span>🚪</span><span>Chiqish</span>
           </button>
         </div>
       </aside>
 
-      {/* Main */}
       <main className="main-content">
         <header className="topbar">
           <button
             className="hamburger-btn"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Menyuni ochish"
+            aria-label="Menyu"
           >
             <span className={`hamburger-line ${sidebarOpen ? 'hamburger-line--top-open' : ''}`} />
             <span className={`hamburger-line ${sidebarOpen ? 'hamburger-line--mid-hide' : ''}`} />
             <span className={`hamburger-line ${sidebarOpen ? 'hamburger-line--bot-open' : ''}`} />
           </button>
-
           <div className="topbar-right">
             <span className="topbar-username">@{user?.username}</span>
-            {user?.role === 'admin' && (
-              <span className="badge badge-red">👑 Admin</span>
-            )}
+            {user?.role === 'admin' && <span className="badge badge-red">👑 Admin</span>}
           </div>
         </header>
-
         <div className="page-content">
           <Outlet />
         </div>

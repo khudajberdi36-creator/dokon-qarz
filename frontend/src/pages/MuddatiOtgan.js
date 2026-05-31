@@ -24,7 +24,7 @@ export default function MuddatiOtgan() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>⏰ Muddati o'tgan qarzlar</h2>
+        <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>⚠️ Muddati o'tgan qarzlar</h2>
         <p style={{ color: 'var(--text2)', fontSize: 13 }}>
           {data.length > 0
             ? `${data.length} ta qarzning muddati o'tib ketgan`

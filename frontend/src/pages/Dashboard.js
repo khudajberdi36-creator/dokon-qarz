@@ -86,7 +86,7 @@ export default function Dashboard() {
       {/* Stats cards */}
       <div className="stats-grid">
         <div className="stat-card purple">
-          <div className="stat-icon">👥</div>
+          <div className="stat-icon">🧾</div>
           <div className="stat-label">Jami qarzdorlar</div>
           <div className="stat-value">{stats?.jami_qarzdorlar || 0}</div>
         </div>
@@ -96,12 +96,12 @@ export default function Dashboard() {
           <div className="stat-value">{formatSum(stats?.qolgan_qarz)}</div>
         </div>
         <div className="stat-card green">
-          <div className="stat-icon">✅</div>
+          <div className="stat-icon">💚</div>
           <div className="stat-label">To'langan</div>
           <div className="stat-value">{formatSum(stats?.tolov_qilingan)}</div>
         </div>
         <div className="stat-card orange">
-          <div className="stat-icon">⏰</div>
+          <div className="stat-icon">⚠️</div>
           <div className="stat-label">Muddati o'tgan</div>
           <div className="stat-value">{stats?.muddati_otgan || 0}</div>
         </div>

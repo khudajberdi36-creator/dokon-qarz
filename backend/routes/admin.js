@@ -68,8 +68,21 @@ router.delete('/users/:id', adminAuth, async (req, res) => {
 // Kirish tarixi
 router.get('/kirish-tarixi', adminAuth, async (req, res) => {
   try {
-    const rows = await db.all_p('SELECT * FROM kirish_tarixi ORDER BY created_at DESC LIMIT 200');
+    // 90 kundan eski yozuvlarni o'chirish
+    await db.run_p("DELETE FROM kirish_tarixi WHERE created_at < NOW() - INTERVAL '90 days'").catch(() => {});
+    const rows = await db.all_p('SELECT * FROM kirish_tarixi ORDER BY created_at DESC LIMIT 500');
     res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Admin: kirish tarixini tozalash (90 kundan eski)
+router.delete('/kirish-tarixi/eski', adminAuth, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const result = await db.run_p(
+      `DELETE FROM kirish_tarixi WHERE created_at < NOW() - INTERVAL '${days} days'`
+    );
+    res.json({ message: `${result.changes || 0} ta eski yozuv o'chirildi` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

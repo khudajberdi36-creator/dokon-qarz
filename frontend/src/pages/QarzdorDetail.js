@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import SummaInput, { formatSum } from '../components/SummaInput';
+import Avatar from '../components/Avatar';
 
 function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
   const [form, setForm] = useState({
@@ -172,6 +173,33 @@ export default function QarzdorDetail() {
     load();
   };
 
+  const printChek = (qarz) => {
+    const win = window.open('', '_blank', 'width=320,height=500');
+    const sana = new Date(qarz.sana).toLocaleDateString('uz-UZ');
+    win.document.write(`
+      <html><head><title>Chek</title>
+      <style>
+        body{font-family:monospace;width:280px;margin:0 auto;padding:10px;font-size:12px}
+        h2{text-align:center;font-size:14px;border-bottom:1px dashed #000;padding-bottom:6px}
+        .row{display:flex;justify-content:space-between;margin:3px 0}
+        .total{font-size:16px;font-weight:bold;border-top:1px dashed #000;padding-top:6px;margin-top:6px}
+        .footer{text-align:center;margin-top:10px;font-size:10px;color:#666}
+      </style></head><body>
+      <h2>🏪 Do'kon Qarz<br/><small>${data?.dokon_nomi || ''}</small></h2>
+      <div class="row"><span>Qarzdor:</span><span>${data.ism} ${data.familiya || ''}</span></div>
+      <div class="row"><span>Telefon:</span><span>${data.telefon}</span></div>
+      <div class="row"><span>Sana:</span><span>${sana}</span></div>
+      <div class="row"><span>Sabab:</span><span>${qarz.sabab || '—'}</span></div>
+      <div class="row total"><span>Qarz summasi:</span><span>${Number(qarz.summa).toLocaleString('uz-UZ')} ${qarz.valyuta}</span></div>
+      <div class="row"><span>To'langan:</span><span style="color:green">${Number(Number(qarz.summa)-Number(qarz.qolgan_summa)).toLocaleString('uz-UZ')} ${qarz.valyuta}</span></div>
+      <div class="row"><span>Qolgan:</span><span style="color:red">${Number(qarz.qolgan_summa).toLocaleString('uz-UZ')} ${qarz.valyuta}</span></div>
+      <div class="footer">${new Date().toLocaleString('uz-UZ')}<br/>Do'kon Qarz tizimi</div>
+      </body></html>
+    `);
+    win.document.close();
+    win.print();
+  };
+
   if (loading) return <div className="loading-page"><div className="spinner" /></div>;
   if (!data) return null;
 
@@ -189,7 +217,7 @@ export default function QarzdorDetail() {
 
       <div className="detail-header">
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flex: 1, flexWrap: 'wrap' }}>
-          <div className="detail-avatar">{data.ism[0].toUpperCase()}</div>
+          <Avatar name={`${data.ism} ${data.familiya || ''}`} size={64} radius={16} fontSize={24} />
           <div className="detail-info">
             <h1>{data.ism} {data.familiya}</h1>
             <div className="contact-links" style={{ marginBottom: 8 }}>
@@ -297,6 +325,9 @@ export default function QarzdorDetail() {
               <div style={{ display: 'flex', gap: 6 }}>
                 <button className="btn btn-success btn-sm" onClick={() => setShowTolovModal(qarz)}>
                   ✅ To'lov
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={() => printChek(qarz)} title="Chek chiqarish">
+                  🖨️
                 </button>
                 <button className="btn btn-secondary btn-sm" onClick={() => handleCloseQarz(qarz.id)}>
                   Yopish
