@@ -89,7 +89,9 @@ export default function QarzdorForm() {
             <div className="form-group">
               <label className="form-label">Telefon raqami *</label>
               <input name="telefon" value={form.telefon} onChange={handleChange}
-                className="form-input" placeholder="+998 90 123 45 67" required />
+                className="form-input" placeholder="+998 90 123 45 67" required
+                pattern="[\+]?[0-9\s\-\(\)]{7,20}"
+                title="+998 90 123 45 67 formatida kiriting" />
             </div>
 
             <div className="form-row">

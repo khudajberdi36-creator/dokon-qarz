@@ -119,7 +119,7 @@ router.post('/', auth, async (req, res) => {
       'INSERT INTO qarzdorlar (user_id, ism, familiya, telefon, telegram, instagram, whatsapp, manzil, izoh) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
       [req.user.id, ism, familiya, telefon, telegram || null, instagram || null, whatsapp || null, manzil || null, izoh || null]
     );
-    res.json({ id: result.lastID, message: "Saqlandi" });
+    res.json({ id: result.lastID || result.rows?.[0]?.id, message: "Saqlandi" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

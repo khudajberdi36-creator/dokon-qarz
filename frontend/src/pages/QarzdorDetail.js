@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import SummaInput, { formatSum } from '../components/SummaInput';
 import Avatar from '../components/Avatar';
+import toast from 'react-hot-toast';
 
 
 function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
@@ -485,7 +486,7 @@ export default function QarzdorDetail() {
       setEslatmaEdit(false);
       load();
     } catch (err) {
-      alert(err.response?.data?.error || "Xatolik");
+      toast.error(err.response?.data?.error || "Xatolik");
     } finally { setEslatmaSaving(false); }
   };
 
@@ -681,7 +682,7 @@ export default function QarzdorDetail() {
                       {qarz.mahsulot_emoji} {qarz.mahsulot_nomi}
                       {qarz.mahsulot_miqdor && (
                         <span style={{ background: 'rgba(99,102,241,0.2)', borderRadius: 4, padding: '0 5px' }}>
-                          {Number(qarz.mahsulot_miqdor)} {qarz.mahsulot_birlik || qarz.mahsulot_birlik_asl || ''}
+                          {Number(qarz.mahsulot_miqdor)} {qarz.mahsulot_birlik_asl || qarz.mahsulot_birlik || ''}
                         </span>
                       )}
                     </span>

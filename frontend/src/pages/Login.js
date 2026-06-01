@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, sessionExpired } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
@@ -34,7 +34,6 @@ export default function Login() {
       background: 'var(--bg)', padding: 16
     }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
-        {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
             width: 72, height: 72, borderRadius: 20,
@@ -46,11 +45,20 @@ export default function Login() {
           <p style={{ color: 'var(--text2)', fontSize: 14 }}>Qarzlarni oson va qulay boshqaring</p>
         </div>
 
-        {/* Login card */}
         <div className="table-card" style={{ padding: 28 }}>
           <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 20, textAlign: 'center' }}>
             🔐 Tizimga kirish
           </h2>
+
+          {sessionExpired && (
+            <div style={{
+              background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)',
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+              color: '#f59e0b', fontSize: 13, fontWeight: 600, textAlign: 'center'
+            }}>
+              ⏰ Sessiya muddati tugadi. Qayta kiring.
+            </div>
+          )}
 
           {error && (
             <div className="error-msg" style={{ marginBottom: 16 }}>

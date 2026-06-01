@@ -288,6 +288,19 @@ body {
   overflow: hidden;
 }
 
+/* ✅ Mobile jadval scroll */
+.table-card table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (min-width: 769px) {
+  .table-card table {
+    display: table;
+    overflow-x: unset;
+  }
+}
+
 .table-header {
   padding: 20px 24px;
   border-bottom: 1px solid var(--border);
