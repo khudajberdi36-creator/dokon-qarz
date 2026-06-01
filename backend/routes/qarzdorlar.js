@@ -7,51 +7,64 @@ const auth = require('../middleware/auth');
 router.get('/', auth, async (req, res) => {
   try {
     const rows = await db.all_p(`
-      SELECT q.*,
-        GREATEST(0,
-          COALESCE((
-            SELECT SUM(qz_a.summa)
-            FROM qarzlar qz_a
-            WHERE qz_a.qarzdor_id = q.id AND qz_a.user_id = $1 AND qz_a.status = 'active'
-          ), 0) -
-          COALESCE((
-            SELECT SUM(t.summa)
-            FROM tolovlar t
-            JOIN qarzlar qz_b ON t.qarz_id = qz_b.id
-            WHERE qz_b.qarzdor_id = q.id AND qz_b.user_id = $2
-          ), 0)
-        ) AS jami_qarz,
-        (
-          SELECT COUNT(*)
-          FROM qarzlar qz_c
-          WHERE qz_c.qarzdor_id = q.id AND qz_c.user_id = $3 AND qz_c.status = 'active'
-        ) as qarz_soni
+      SELECT
+        q.*,
+        COALESCE(active_qarz.jami, 0) - COALESCE(tolov.jami, 0) AS jami_qarz,
+        COALESCE(active_qarz.soni, 0) AS qarz_soni
       FROM qarzdorlar q
-      WHERE q.user_id = $4
-      ORDER BY jami_qarz DESC
-    `, [req.user.id, req.user.id, req.user.id, req.user.id]);
+      LEFT JOIN (
+        SELECT qarzdor_id,
+               SUM(summa) AS jami,
+               COUNT(*) AS soni
+        FROM qarzlar
+        WHERE user_id = $1 AND status = 'active'
+        GROUP BY qarzdor_id
+      ) active_qarz ON active_qarz.qarzdor_id = q.id
+      LEFT JOIN (
+        SELECT qz.qarzdor_id, SUM(t.summa) AS jami
+        FROM tolovlar t
+        JOIN qarzlar qz ON t.qarz_id = qz.id
+        WHERE qz.user_id = $2 AND qz.status = 'active'
+        GROUP BY qz.qarzdor_id
+      ) tolov ON tolov.qarzdor_id = q.id
+      WHERE q.user_id = $3
+      ORDER BY jami_qarz DESC NULLS LAST
+    `, [req.user.id, req.user.id, req.user.id]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Qidiruv — ✅ TUZATILDI: qarz_soni ham qaytariladi
+// Qidiruv
 router.get('/search', auth, async (req, res) => {
   try {
     const q = `%${req.query.q || ''}%`;
     const rows = await db.all_p(`
-      SELECT q.*,
-        GREATEST(0,
-          COALESCE((SELECT SUM(qz.summa) FROM qarzlar qz WHERE qz.qarzdor_id = q.id AND qz.user_id = $1 AND qz.status = 'active'), 0) -
-          COALESCE((SELECT SUM(t.summa) FROM tolovlar t JOIN qarzlar qz ON t.qarz_id = qz.id WHERE qz.qarzdor_id = q.id AND qz.user_id = $2), 0)
-        ) AS jami_qarz,
-        (SELECT COUNT(*) FROM qarzlar qz WHERE qz.qarzdor_id = q.id AND qz.user_id = $3 AND qz.status = 'active') as qarz_soni
+      SELECT
+        q.*,
+        COALESCE(active_qarz.jami, 0) - COALESCE(tolov.jami, 0) AS jami_qarz,
+        COALESCE(active_qarz.soni, 0) AS qarz_soni
       FROM qarzdorlar q
-      WHERE q.user_id = $4
-        AND (q.ism ILIKE $5 OR q.familiya ILIKE $5 OR q.telefon ILIKE $5)
+      LEFT JOIN (
+        SELECT qarzdor_id,
+               SUM(summa) AS jami,
+               COUNT(*) AS soni
+        FROM qarzlar
+        WHERE user_id = $1 AND status = 'active'
+        GROUP BY qarzdor_id
+      ) active_qarz ON active_qarz.qarzdor_id = q.id
+      LEFT JOIN (
+        SELECT qz.qarzdor_id, SUM(t.summa) AS jami
+        FROM tolovlar t
+        JOIN qarzlar qz ON t.qarz_id = qz.id
+        WHERE qz.user_id = $2 AND qz.status = 'active'
+        GROUP BY qz.qarzdor_id
+      ) tolov ON tolov.qarzdor_id = q.id
+      WHERE q.user_id = $3
+        AND (q.ism ILIKE $4 OR q.familiya ILIKE $4 OR q.telefon ILIKE $4)
       ORDER BY q.ism
-    `, [req.user.id, req.user.id, req.user.id, req.user.id, q]);
+    `, [req.user.id, req.user.id, req.user.id, q]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });

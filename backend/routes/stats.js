@@ -7,7 +7,11 @@ const auth = require('../middleware/auth');
 router.get('/', auth, async (req, res) => {
   try {
     const r1 = await db.get_p('SELECT COUNT(*) as c FROM qarzdorlar WHERE user_id = $1', [req.user.id]);
-    const r2 = await db.get_p("SELECT COALESCE(SUM(summa), 0) as total FROM qarzlar WHERE user_id = $1 AND status = 'active'", [req.user.id]);
+    const r2 = await db.get_p(`
+      SELECT COALESCE(SUM(summa), 0) as total
+      FROM qarzlar
+      WHERE user_id = $1 AND status = 'active'
+    `, [req.user.id]);
     const r3 = await db.get_p(`
       SELECT COALESCE(SUM(t.summa), 0) as total
       FROM tolovlar t
