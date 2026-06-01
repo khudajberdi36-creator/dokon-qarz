@@ -11,9 +11,9 @@ export default function NaxtSotuv() {
   const [loading, setLoading] = useState(true);
   const [savingLoading, setSavingLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedSana, setSelectedSana] = useState(new Date().toISOString().split('T')[0]);
-  const [davrFilter, setDavrFilter] = useState('bugun');
 
   const [form, setForm] = useState({
     mahsulot_id: '',
@@ -23,23 +23,27 @@ export default function NaxtSotuv() {
     izoh: ''
   });
   const [selectedMahsulot, setSelectedMahsulot] = useState(null);
-  const [bugunJami, setBugunJami] = useState(0);
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const [mRes, sRes] = await Promise.all([
-        axios.get('/api/mahsulotlar'),
-        axios.get(`/api/qarzlar/naxt-sotuvlar?sana=${selectedSana}`)
-      ]);
+      // Avval mahsulotlarni yuklash
+      const mRes = await axios.get('/api/mahsulotlar');
       setMahsulotlar(mRes.data);
-      setSotuvlar(sRes.data);
-      setBugunJami(sRes.data.reduce((sum, s) => sum + Number(s.jami_summa), 0));
-    } catch {
-      setError('Xatolik yuz berdi');
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error('Mahsulotlar xato:', err);
+      setLoadError('Mahsulotlarni yuklashda xatolik: ' + (err.response?.data?.error || err.message));
     }
+    try {
+      // Keyin sotuvlarni yuklash
+      const sRes = await axios.get(`/api/qarzlar/naxt-sotuvlar?sana=${selectedSana}`);
+      setSotuvlar(sRes.data);
+    } catch (err) {
+      console.error('Sotuvlar xato:', err);
+      setLoadError(prev => prev + ' | Sotuvlarni yuklashda xatolik: ' + (err.response?.data?.error || err.message));
+    }
+    setLoading(false);
   }, [selectedSana]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -60,6 +64,9 @@ export default function NaxtSotuv() {
     setSuccess('');
     if (!form.mahsulot_id) return setError('Mahsulot tanlang');
     if (!form.miqdor || form.miqdor <= 0) return setError("Miqdor 0 dan katta bo'lishi kerak");
+    if (selectedMahsulot && Number(form.miqdor) > Number(selectedMahsulot.miqdor)) {
+      return setError(`Yetarli mahsulot yo'q! Mavjud: ${selectedMahsulot.miqdor} ${selectedMahsulot.birlik}`);
+    }
     setSavingLoading(true);
     try {
       const res = await axios.post('/api/qarzlar/naxt-sotuv', {
@@ -69,18 +76,21 @@ export default function NaxtSotuv() {
         sana: form.sana,
         izoh: form.izoh
       });
-      setSuccess(`✅ ${res.data.mahsulot_nomi} — ${formatSum(res.data.jami)} so'm`);
+      setSuccess(`✅ ${res.data.mahsulot_nomi} — ${formatSum(res.data.jami)} so'm sotildi. Qolgan: ${res.data.qolgan_miqdor} dona`);
       setForm(f => ({ ...f, mahsulot_id: '', miqdor: 1, narx: '', izoh: '' }));
       setSelectedMahsulot(null);
       loadData();
     } catch (err) {
-      setError(err.response?.data?.error || 'Xatolik');
+      setError(err.response?.data?.error || 'Serverda xatolik yuz berdi');
     } finally {
       setSavingLoading(false);
     }
   };
 
-  const jami = selectedMahsulot ? Number(form.narx || selectedMahsulot.narx) * Number(form.miqdor || 1) : 0;
+  const bugunJami = sotuvlar.reduce((sum, s) => sum + Number(s.jami_summa), 0);
+  const jami = selectedMahsulot
+    ? Number(form.narx || selectedMahsulot.narx) * Number(form.miqdor || 1)
+    : 0;
 
   if (loading) return <div className="loading-page"><div className="spinner" /></div>;
 
@@ -91,7 +101,17 @@ export default function NaxtSotuv() {
         <p style={{ color: 'var(--text2)', fontSize: 13 }}>Qarzga emas, naxt pul bilan sotish</p>
       </div>
 
-      {/* Bugungi tushum */}
+      {/* Yuklash xatosi — qaysi endpoint ishlamayotganini ko'rsatadi */}
+      {loadError && (
+        <div style={{
+          background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)',
+          borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#fca5a5'
+        }}>
+          🔴 {loadError}
+        </div>
+      )}
+
+      {/* Statistika */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px,1fr))', gap: 12, marginBottom: 20 }}>
         <div className="stat-card green">
           <div className="stat-icon">💵</div>
@@ -103,6 +123,11 @@ export default function NaxtSotuv() {
           <div className="stat-label">Sotuvlar soni</div>
           <div className="stat-value">{sotuvlar.length}</div>
         </div>
+        <div className="stat-card blue" style={{ '--card-color': '#3b82f6' }}>
+          <div className="stat-icon">📦</div>
+          <div className="stat-label">Mahsulotlar</div>
+          <div className="stat-value">{mahsulotlar.length}</div>
+        </div>
       </div>
 
       {/* Sotuv formasi */}
@@ -111,7 +136,11 @@ export default function NaxtSotuv() {
 
         {error && <div className="error-msg" style={{ marginBottom: 12 }}>⚠️ {error}</div>}
         {success && (
-          <div style={{ background: '#10b98122', border: '1px solid #10b981', borderRadius: 8, padding: '10px 14px', marginBottom: 12, color: '#10b981', fontWeight: 600 }}>
+          <div style={{
+            background: '#10b98122', border: '1px solid #10b981',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+            color: '#10b981', fontWeight: 600, fontSize: 13
+          }}>
             {success}
           </div>
         )}
@@ -121,18 +150,31 @@ export default function NaxtSotuv() {
 
             <div className="form-group">
               <label className="form-label">📦 Mahsulot *</label>
-              <select value={form.mahsulot_id} onChange={handleMahsulot} className="form-input" required>
-                <option value="">— Tanlang —</option>
-                {mahsulotlar.map(m => (
-                  <option key={m.id} value={m.id} disabled={Number(m.miqdor) <= 0}>
-                    {m.nomi} — {formatSum(m.narx)} so'm (Qoldi: {m.miqdor} {m.birlik})
-                    {Number(m.miqdor) <= 0 ? ' [TUGAGAN]' : ''}
-                  </option>
-                ))}
-              </select>
+              {mahsulotlar.length === 0 ? (
+                <div style={{ padding: '10px 14px', background: 'var(--bg3)', borderRadius: 8, fontSize: 13, color: 'var(--text2)' }}>
+                  ⚠️ Mahsulotlar yo'q. Avval{' '}
+                  <a href="/mahsulotlar" style={{ color: 'var(--accent)' }}>Mahsulotlar</a> bo'limidan qo'shing.
+                </div>
+              ) : (
+                <select value={form.mahsulot_id} onChange={handleMahsulot} className="form-input" required>
+                  <option value="">— Tanlang —</option>
+                  {mahsulotlar.map(m => (
+                    <option key={m.id} value={m.id} disabled={Number(m.miqdor) <= 0}>
+                      {m.emoji || '📦'} {m.nomi} — {formatSum(m.narx)} so'm
+                      {' '}(Qoldi: {m.miqdor} {m.birlik})
+                      {Number(m.miqdor) <= 0 ? ' ❌ TUGAGAN' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
               {selectedMahsulot && (
-                <div style={{ fontSize: 11, color: Number(selectedMahsulot.miqdor) < 5 ? '#f59e0b' : 'var(--text3)', marginTop: 4 }}>
-                  Mavjud miqdor: <strong>{selectedMahsulot.miqdor} {selectedMahsulot.birlik}</strong>
+                <div style={{
+                  fontSize: 12, marginTop: 5, padding: '6px 10px', borderRadius: 6,
+                  background: Number(selectedMahsulot.miqdor) < 5 ? 'rgba(245,158,11,0.1)' : 'var(--bg3)',
+                  color: Number(selectedMahsulot.miqdor) < 5 ? '#f59e0b' : 'var(--text3)'
+                }}>
+                  📦 Mavjud: <strong>{selectedMahsulot.miqdor} {selectedMahsulot.birlik}</strong>
+                  {Number(selectedMahsulot.miqdor) < 5 && ' ⚠️ Kam qoldi!'}
                 </div>
               )}
             </div>
@@ -149,6 +191,11 @@ export default function NaxtSotuv() {
                 className="form-input"
                 required
               />
+              {selectedMahsulot && Number(form.miqdor) > Number(selectedMahsulot.miqdor) && (
+                <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
+                  ❌ Yetarli emas! Max: {selectedMahsulot.miqdor}
+                </div>
+              )}
             </div>
 
             <div className="form-group">
@@ -205,7 +252,7 @@ export default function NaxtSotuv() {
             type="submit"
             className="btn btn-success"
             style={{ marginTop: 16, padding: '12px 32px', fontSize: 15 }}
-            disabled={savingLoading || !form.mahsulot_id}
+            disabled={savingLoading || !form.mahsulot_id || mahsulotlar.length === 0}
           >
             {savingLoading ? <span className="spinner" /> : '💵 Sotish'}
           </button>
@@ -238,6 +285,7 @@ export default function NaxtSotuv() {
                 <th>Narx</th>
                 <th>Jami</th>
                 <th>Izoh</th>
+                <th>Vaqt</th>
               </tr>
             </thead>
             <tbody>
@@ -254,6 +302,9 @@ export default function NaxtSotuv() {
                     </span>
                   </td>
                   <td style={{ color: 'var(--text2)', fontSize: 12 }}>{s.izoh || '—'}</td>
+                  <td style={{ fontSize: 11, color: 'var(--text3)' }}>
+                    {new Date(s.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -261,9 +312,9 @@ export default function NaxtSotuv() {
               <tr>
                 <td colSpan={3} style={{ fontWeight: 700, textAlign: 'right', padding: '12px 16px' }}>Jami:</td>
                 <td style={{ fontWeight: 800, color: '#10b981', fontSize: 16, padding: '12px 16px' }}>
-                  {formatSum(sotuvlar.reduce((s, r) => s + Number(r.jami_summa), 0))} so'm
+                  {formatSum(bugunJami)} so'm
                 </td>
-                <td />
+                <td colSpan={2} />
               </tr>
             </tfoot>
           </table>
