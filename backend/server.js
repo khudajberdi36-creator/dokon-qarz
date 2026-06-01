@@ -21,7 +21,8 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/mahsulotlar', require('./routes/mahsulotlar'));
 app.use('/api/kirish-tarixi', require('./routes/kirish_tarixi'));
 
-app.get('/', (req, res) => res.json({ status: 'ok', message: 'Dokon-Qarz API ✅' }));
+app.get("/", (req, res) => res.json({ status: "ok", message: "Dokon-Qarz API ✅" }));
+app.get("/api/health", (req, res) => res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() }));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server ${PORT} portda ishlamoqda`));
