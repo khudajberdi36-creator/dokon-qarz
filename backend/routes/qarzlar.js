@@ -118,26 +118,43 @@ router.post('/', auth, async (req, res) => {
     if (!qarzdor) return res.status(403).json({ error: "Ruxsat yo'q" });
 
     let mahsulotBirlik = 'dona';
-    let qoladiMiqdor = null;
 
-    if (mahsulot_id) {
+    // Ko'p mahsulot ro'yxati (yangi tizim)
+    const mahsulotlarRoyxat = req.body.mahsulotlar_royxat || [];
+
+    if (mahsulotlarRoyxat.length > 0) {
+      // Har bir mahsulotni tekshir va miqdorini kamaytir
+      for (const item of mahsulotlarRoyxat) {
+        const m = await db.get_p(
+          'SELECT * FROM mahsulotlar WHERE id=$1 AND user_id=$2',
+          [item.mahsulot_id, req.user.id]
+        );
+        if (!m) return res.status(404).json({ error: `Mahsulot topilmadi (id: ${item.mahsulot_id})` });
+        const olish = Number(item.miqdor) > 0 ? Number(item.miqdor) : 1;
+        if (Number(m.miqdor) < olish) {
+          return res.status(400).json({
+            error: `"${m.nomi}" yetarli emas! Mavjud: ${m.miqdor} ${m.birlik}`
+          });
+        }
+        await db.run_p(
+          'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1), updated_at = NOW() WHERE id=$2 AND user_id=$3',
+          [olish, m.id, req.user.id]
+        );
+      }
+    } else if (mahsulot_id) {
+      // Eski tizim (bitta mahsulot)
       const mahsulot = await db.get_p(
         'SELECT * FROM mahsulotlar WHERE id=$1 AND user_id=$2',
         [mahsulot_id, req.user.id]
       );
       if (!mahsulot) return res.status(404).json({ error: "Mahsulot topilmadi" });
-
       const miqdorKamaytir = Number(mahsulot_miqdor) > 0 ? Number(mahsulot_miqdor) : 1;
-
       if (Number(mahsulot.miqdor) < miqdorKamaytir) {
         return res.status(400).json({
           error: `Mahsulot yetarli emas! Mavjud: ${mahsulot.miqdor} ${mahsulot.birlik}`
         });
       }
-
       mahsulotBirlik = mahsulot.birlik;
-      qoladiMiqdor = Math.max(0, Number(mahsulot.miqdor) - miqdorKamaytir);
-
       await db.run_p(
         'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1), updated_at = NOW() WHERE id=$2 AND user_id=$3',
         [miqdorKamaytir, mahsulot_id, req.user.id]
