@@ -130,6 +130,8 @@ async function initDB() {
     `ALTER TABLE qarzdorlar ADD COLUMN IF NOT EXISTS eslatma TEXT`,
     `ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS ogohlantirish_chegara INTEGER DEFAULT 5`,
     `ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS emoji TEXT DEFAULT '📦'`,
+    `ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS mahsulot_miqdor NUMERIC DEFAULT 1`,
+    `ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS mahsulot_birlik TEXT DEFAULT 'dona'`,
     // naxt_sotuvlar jadvali mavjud bo'lmasa CREATE qiladi (yuqorida allaqachon)
     // Lekin eski DB larda yo'q bo'lishi mumkin - shuning uchun alohida yaratamiz:
     `CREATE TABLE IF NOT EXISTS naxt_sotuvlar (

@@ -13,31 +13,60 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
   const [mahsulotlar, setMahsulotlar] = useState([]);
   const [selectedMahsulot, setSelectedMahsulot] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [mahsulotLoading, setMahsulotLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    axios.get('/api/mahsulotlar').then(r => setMahsulotlar(r.data)).catch(() => {});
+    setMahsulotLoading(true);
+    axios.get('/api/mahsulotlar')
+      .then(r => setMahsulotlar(r.data))
+      .catch(() => {})
+      .finally(() => setMahsulotLoading(false));
   }, []);
 
+  // Birlikni chiroyli ko'rsatish
+  const birlikLabel = (birlik) => {
+    const MAP = {
+      'dona':'dona', 'quti':'quti', 'paket':'paket', 'juft':'juft',
+      'g':'g', '50g':'50g', '100g':'100g', '250g':'250g', '500g':'500g',
+      'kg':'kg', '2kg':'2kg', '5kg':'5kg', '10kg':'10kg', '25kg':'25kg qop', '50kg':'50kg qop',
+      'ml':'ml', '100ml':'100ml', '200ml':'200ml', '250ml':'250ml', '330ml':'330ml',
+      '0.5l':'0.5 litr', '0.75l':'0.75 litr', '1l':'1 litr', '1.5l':'1.5 litr',
+      '2l':'2 litr', '3l':'3 litr', '5l':'5 litr', '10l':'10 litr', '19l':'19 litr',
+      'litr':'litr', 'sm':'sm', 'metr':'m', 'm2':'m²', 'rol':'rulon',
+      'soat':'soat', 'kun':'kun', 'oy':'oy', 'xizmat':'xizmat',
+    };
+    return MAP[birlik] || birlik || 'dona';
+  };
+
+  // Miqdor step — kasrli bo'lsa 0.1, aks holda 1
+  const getMiqdorStep = (birlik) => {
+    const kasrlilar = ['g','kg','litr','ml','metr','sm','m2','0.5l','0.75l','1l','1.5l','2l','3l','5l','10l','19l'];
+    return kasrlilar.includes(birlik) ? '0.001' : '1';
+  };
+
   const handleMahsulot = (e) => {
-    const m = mahsulotlar.find(m => String(m.id) === e.target.value);
+    const val = e.target.value;
+    if (!val) {
+      setSelectedMahsulot(null);
+      setForm(f => ({ ...f, mahsulot_id: null, mahsulot_miqdor: 1, sabab: '' }));
+      return;
+    }
+    const m = mahsulotlar.find(m => String(m.id) === val);
     if (m) {
       setSelectedMahsulot(m);
       setForm(f => ({
         ...f,
         mahsulot_id: m.id,
-        summa: String(Number(m.narx) * Number(f.mahsulot_miqdor || 1)),
+        summa: String(Number(m.narx) * 1),
         sabab: m.nomi,
         mahsulot_miqdor: 1
       }));
-    } else {
-      setSelectedMahsulot(null);
-      setForm(f => ({ ...f, mahsulot_id: null, mahsulot_miqdor: 1 }));
     }
   };
 
   const handleMiqdor = (val) => {
-    const miqdor = Number(val) || 1;
+    const miqdor = parseFloat(val) || 1;
     setForm(f => ({
       ...f,
       mahsulot_miqdor: miqdor,
@@ -47,17 +76,18 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.summa) return setError("Summa kiritilmadi");
+    if (!form.summa || Number(form.summa) <= 0) return setError("Summa kiritilmadi");
     if (selectedMahsulot && Number(form.mahsulot_miqdor) > Number(selectedMahsulot.miqdor)) {
-      return setError(`Yetarli mahsulot yo'q! Mavjud: ${selectedMahsulot.miqdor} ${selectedMahsulot.birlik}`);
+      return setError(`Yetarli mahsulot yo'q! Mavjud: ${selectedMahsulot.miqdor} ${birlikLabel(selectedMahsulot.birlik)}`);
     }
     setLoading(true);
+    setError('');
     try {
       await axios.post('/api/qarzlar', {
         ...form,
         qarzdor_id: qarzdorId,
         summa: Number(form.summa),
-        mahsulot_miqdor: Number(form.mahsulot_miqdor) || 1
+        mahsulot_miqdor: parseFloat(form.mahsulot_miqdor) || 1
       });
       onSuccess();
     } catch (err) {
@@ -75,78 +105,131 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
             {error && <div className="error-msg">⚠️ {error}</div>}
+
             {/* Mahsulotdan tanlash */}
-            {mahsulotlar.length > 0 && (
-              <div className="form-group">
-                <label className="form-label">📦 Mahsulotdan tanlash (ixtiyoriy)</label>
+            <div className="form-group">
+              <label className="form-label">🛒 Mahsulotdan tanlash (ixtiyoriy)</label>
+              {mahsulotLoading ? (
+                <div style={{ padding: '10px', color: 'var(--text3)', fontSize: 13 }}>⏳ Mahsulotlar yuklanmoqda...</div>
+              ) : mahsulotlar.length === 0 ? (
+                <div style={{ padding: '10px', color: 'var(--text3)', fontSize: 13 }}>📦 Mahsulotlar qo'shilmagan</div>
+              ) : (
                 <select onChange={handleMahsulot} className="form-input" defaultValue="">
                   <option value="">— Qo'lda kiritish —</option>
                   {mahsulotlar.map(m => (
                     <option key={m.id} value={m.id} disabled={Number(m.miqdor) <= 0}>
                       {m.emoji || '📦'} {m.nomi} — {formatSum(m.narx)} so'm
-                      {' '}(Qoldi: {m.miqdor} {m.birlik}){Number(m.miqdor) <= 0 ? ' [TUGAGAN]' : ''}
+                      {' '}({Number(m.miqdor)} {birlikLabel(m.birlik)} qoldi){Number(m.miqdor) <= 0 ? ' [TUGAGAN]' : ''}
                     </option>
                   ))}
                 </select>
-                {selectedMahsulot && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: Number(selectedMahsulot.miqdor) < 5 ? '#f59e0b' : 'var(--text3)' }}>
-                    📦 Mavjud: <strong>{selectedMahsulot.miqdor} {selectedMahsulot.birlik}</strong>
-                    {' '}| Narxi: <strong>{formatSum(selectedMahsulot.narx)} so'm</strong>
-                  </div>
-                )}
-              </div>
-            )}
-            {/* Mahsulot tanlanganda miqdor so'ralsin */}
+              )}
+            </div>
+
+            {/* Tanlangan mahsulot info */}
             {selectedMahsulot && (
-              <div className="form-group">
-                <label className="form-label">📊 Miqdor ({selectedMahsulot.birlik}) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={selectedMahsulot.miqdor}
-                  step="1"
-                  value={form.mahsulot_miqdor}
-                  onChange={e => handleMiqdor(e.target.value)}
-                  className="form-input"
-                  required
-                />
-                {Number(form.mahsulot_miqdor) > Number(selectedMahsulot.miqdor) && (
-                  <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
-                    ⚠️ Yetarli emas! Mavjud: {selectedMahsulot.miqdor} {selectedMahsulot.birlik}
+              <div style={{
+                background: 'var(--bg3)', borderRadius: 10, padding: '12px 14px',
+                marginBottom: 12, border: '1px solid var(--border)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 24 }}>{selectedMahsulot.emoji || '📦'}</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedMahsulot.nomi}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+                      Narxi: <strong>{formatSum(selectedMahsulot.narx)} so'm</strong> /
+                      {birlikLabel(selectedMahsulot.birlik)}
+                    </div>
                   </div>
-                )}
-                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
-                  Jami: {form.mahsulot_miqdor} × {formatSum(selectedMahsulot.narx)} = <strong style={{ color: 'var(--text)' }}>{formatSum(Number(selectedMahsulot.narx) * Number(form.mahsulot_miqdor))} so'm</strong>
+                  <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>Mavjud</div>
+                    <div style={{
+                      fontWeight: 700, fontSize: 15,
+                      color: Number(selectedMahsulot.miqdor) < 5 ? '#f59e0b' : '#10b981'
+                    }}>
+                      {Number(selectedMahsulot.miqdor)} {birlikLabel(selectedMahsulot.birlik)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Miqdor input */}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">
+                    Nechta / qancha ({birlikLabel(selectedMahsulot.birlik)})
+                  </label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      min="0.001"
+                      max={selectedMahsulot.miqdor}
+                      step={getMiqdorStep(selectedMahsulot.birlik)}
+                      value={form.mahsulot_miqdor}
+                      onChange={e => handleMiqdor(e.target.value)}
+                      className="form-input"
+                      style={{ width: 120 }}
+                    />
+                    <span style={{ fontSize: 13, color: 'var(--text2)' }}>
+                      {birlikLabel(selectedMahsulot.birlik)}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 'auto' }}>
+                      = <strong style={{ color: 'var(--text)', fontSize: 14 }}>
+                        {formatSum(Number(selectedMahsulot.narx) * Number(form.mahsulot_miqdor))} so'm
+                      </strong>
+                    </span>
+                  </div>
+                  {Number(form.mahsulot_miqdor) > Number(selectedMahsulot.miqdor) && (
+                    <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
+                      ⚠️ Yetarli emas! Mavjud: {selectedMahsulot.miqdor} {birlikLabel(selectedMahsulot.birlik)}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
+
+            {/* Summa + Valyuta */}
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Summa *</label>
-                <SummaInput value={form.summa} onChange={val => setForm({...form, summa: val})} placeholder="100 000" required />
+                <SummaInput
+                  value={form.summa}
+                  onChange={val => setForm({...form, summa: val})}
+                  placeholder="100 000"
+                  required
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Valyuta</label>
                 <select value={form.valyuta} onChange={e => setForm({...form, valyuta: e.target.value})} className="form-input">
-                  <option value="UZS">UZS (so'm)</option>
-                  <option value="USD">USD (dollar)</option>
-                  <option value="EUR">EUR (yevro)</option>
+                  <option value="UZS">🇺🇿 UZS (so'm)</option>
+                  <option value="USD">🇺🇸 USD (dollar)</option>
+                  <option value="EUR">🇪🇺 EUR (yevro)</option>
                 </select>
               </div>
             </div>
+
+            {/* Sana + Muddat */}
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Qarz sanasi *</label>
-                <input type="date" value={form.sana} onChange={e => setForm({...form, sana: e.target.value})} className="form-input" required />
+                <input type="date" value={form.sana}
+                  onChange={e => setForm({...form, sana: e.target.value})}
+                  className="form-input" required />
               </div>
               <div className="form-group">
                 <label className="form-label">Qaytarish muddati</label>
-                <input type="date" value={form.muddat} onChange={e => setForm({...form, muddat: e.target.value})} className="form-input" />
+                <input type="date" value={form.muddat}
+                  onChange={e => setForm({...form, muddat: e.target.value})}
+                  className="form-input" />
               </div>
             </div>
+
+            {/* Sabab */}
             <div className="form-group">
               <label className="form-label">Sabab / Izoh</label>
-              <input value={form.sabab} onChange={e => setForm({...form, sabab: e.target.value})} className="form-input" placeholder="Masalan: oziq-ovqat, kiyim-kechak..." />
+              <input value={form.sabab}
+                onChange={e => setForm({...form, sabab: e.target.value})}
+                className="form-input"
+                placeholder="Masalan: oziq-ovqat, kiyim-kechak..." />
             </div>
           </div>
           <div className="modal-footer">
@@ -160,6 +243,7 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
     </div>
   );
 }
+
 
 function AddTolovModal({ qarzId, qarzSumma, onClose, onSuccess }) {
   const [form, setForm] = useState({ summa: '', sana: new Date().toISOString().split('T')[0], izoh: '' });
@@ -510,9 +594,15 @@ export default function QarzdorDetail() {
                   {qarz.mahsulot_nomi && (
                     <span style={{
                       fontSize: 11, background: 'rgba(99,102,241,0.15)', color: '#818cf8',
-                      padding: '2px 8px', borderRadius: 6, fontWeight: 600, marginLeft: 4
+                      padding: '2px 8px', borderRadius: 6, fontWeight: 600, marginLeft: 4,
+                      display: 'inline-flex', alignItems: 'center', gap: 4
                     }}>
                       {qarz.mahsulot_emoji} {qarz.mahsulot_nomi}
+                      {qarz.mahsulot_miqdor && (
+                        <span style={{ background: 'rgba(99,102,241,0.2)', borderRadius: 4, padding: '0 5px' }}>
+                          {Number(qarz.mahsulot_miqdor)} {qarz.mahsulot_birlik || qarz.mahsulot_birlik_asl || ''}
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>

@@ -321,18 +321,25 @@ export default function Mahsulotlar() {
                       ? <span style={{ background: m.rang + '33', color: m.rang, padding: '3px 10px', borderRadius: 20, fontSize: 12 }}>{m.emoji} {m.kategoriya_nomi}</span>
                       : <span style={{ color: 'var(--text3)' }}>—</span>}
                   </td>
-                  <td style={{ fontWeight: 600 }}>
-                    {formatSum(m.narx)} so'm
-                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>/ {getBirlikLabel(m.birlik)}</div>
+                  <td>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{formatSum(m.narx)} so'm</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
+                      1 {getBirlikLabel(m.birlik)} uchun
+                    </div>
                   </td>
                   <td>
-                    <span style={{
-                      fontWeight: 600,
-                      color: Number(m.miqdor) === 0 ? '#ef4444' : Number(m.miqdor) < 5 ? '#f59e0b' : 'var(--text)'
-                    }}>
-                      {Number(m.miqdor) === 0 && <span title="Tugagan">⚠️ </span>}
-                      {m.miqdor} {getBirlikLabel(m.birlik)}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{
+                        fontWeight: 700, fontSize: 15,
+                        color: Number(m.miqdor) === 0 ? '#ef4444' : Number(m.miqdor) < 5 ? '#f59e0b' : '#10b981'
+                      }}>
+                        {Number(m.miqdor) === 0 && '⚠️ '}
+                        {Number(m.miqdor) % 1 === 0 ? Number(m.miqdor) : Number(m.miqdor)}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 500 }}>
+                        {getBirlikLabel(m.birlik)}
+                      </span>
+                    </div>
                   </td>
                   <td style={{ fontWeight: 700, color: '#10b981' }}>{formatSum(m.umumiy_qiymat)} so'm</td>
                   <td>

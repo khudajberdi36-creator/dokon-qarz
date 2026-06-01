@@ -7,12 +7,16 @@ const auth = require('../middleware/auth');
 router.get('/muddati-otgan', auth, async (req, res) => {
   try {
     const rows = await db.all_p(`
-      SELECT qz.*, qr.ism, qr.familiya, qr.telefon, qr.telegram, qr.whatsapp, qr.instagram,
+      SELECT qz.*,
+        qr.ism, qr.familiya, qr.telefon, qr.telegram, qr.whatsapp, qr.instagram,
         GREATEST(0,
           qz.summa - COALESCE((SELECT SUM(t.summa) FROM tolovlar t WHERE t.qarz_id = qz.id), 0)
-        ) as qolgan_summa
+        ) as qolgan_summa,
+        m.nomi as mahsulot_nomi, COALESCE(m.emoji,'📦') as mahsulot_emoji,
+        m.birlik as mahsulot_birlik_asl
       FROM qarzlar qz
       JOIN qarzdorlar qr ON qr.id = qz.qarzdor_id
+      LEFT JOIN mahsulotlar m ON m.id = qz.mahsulot_id
       WHERE qz.user_id = $1
         AND qz.status = 'active'
         AND qz.muddat IS NOT NULL
@@ -25,7 +29,7 @@ router.get('/muddati-otgan', auth, async (req, res) => {
   }
 });
 
-// ✅ Naxt sotish - mahsulot miqdori kamayadi, naxt_sotuvlar ga yoziladi
+// Naxt sotish
 router.post('/naxt-sotuv', auth, async (req, res) => {
   try {
     const { mahsulot_id, miqdor, narx, sana, izoh } = req.body;
@@ -46,13 +50,11 @@ router.post('/naxt-sotuv', auth, async (req, res) => {
     const jami = sotuvNarx * Number(miqdor);
     const sotuvSana = sana || new Date().toISOString().split('T')[0];
 
-    // Mahsulot miqdorini kamaytir
     await db.run_p(
-      'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1) WHERE id=$2 AND user_id=$3',
+      'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1), updated_at = NOW() WHERE id=$2 AND user_id=$3',
       [Number(miqdor), mahsulot_id, req.user.id]
     );
 
-    // Naxt sotuv jadvaliga yozuv
     await db.run_p(
       `INSERT INTO naxt_sotuvlar (user_id, mahsulot_id, miqdor, narx, jami_summa, sana, izoh)
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -99,7 +101,11 @@ router.get('/naxt-sotuvlar', auth, async (req, res) => {
 // Yangi qarz qo'shish — mahsulot tanlansa miqdor kamayadi
 router.post('/', auth, async (req, res) => {
   try {
-    const { qarzdor_id, summa, valyuta, sana, muddat, sabab, mahsulot_id, mahsulot_miqdor } = req.body;
+    const {
+      qarzdor_id, summa, valyuta, sana, muddat, sabab,
+      mahsulot_id, mahsulot_miqdor
+    } = req.body;
+
     if (!qarzdor_id || !summa || !sana)
       return res.status(400).json({ error: "Majburiy maydonlar to'ldirilmagan" });
     if (Number(summa) <= 0)
@@ -111,7 +117,9 @@ router.post('/', auth, async (req, res) => {
     );
     if (!qarzdor) return res.status(403).json({ error: "Ruxsat yo'q" });
 
-    // Mahsulot tekshirish va miqdor kamaytirish
+    let mahsulotBirlik = 'dona';
+    let qoladiMiqdor = null;
+
     if (mahsulot_id) {
       const mahsulot = await db.get_p(
         'SELECT * FROM mahsulotlar WHERE id=$1 AND user_id=$2',
@@ -120,19 +128,23 @@ router.post('/', auth, async (req, res) => {
       if (!mahsulot) return res.status(404).json({ error: "Mahsulot topilmadi" });
 
       const miqdorKamaytir = Number(mahsulot_miqdor) > 0 ? Number(mahsulot_miqdor) : 1;
+
       if (Number(mahsulot.miqdor) < miqdorKamaytir) {
         return res.status(400).json({
           error: `Mahsulot yetarli emas! Mavjud: ${mahsulot.miqdor} ${mahsulot.birlik}`
         });
       }
 
+      mahsulotBirlik = mahsulot.birlik;
+      qoladiMiqdor = Math.max(0, Number(mahsulot.miqdor) - miqdorKamaytir);
+
       await db.run_p(
-        'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1) WHERE id=$2 AND user_id=$3',
+        'UPDATE mahsulotlar SET miqdor = GREATEST(0, miqdor - $1), updated_at = NOW() WHERE id=$2 AND user_id=$3',
         [miqdorKamaytir, mahsulot_id, req.user.id]
       );
     }
 
-    // Qarz raqami (QRZ-0001)
+    // Qarz raqami
     const lastNum = await db.get_p(
       'SELECT MAX(qarz_raqam) as mx FROM qarzlar WHERE user_id=$1',
       [req.user.id]
@@ -140,21 +152,33 @@ router.post('/', auth, async (req, res) => {
     const nextNum = (Number(lastNum?.mx) || 0) + 1;
 
     const result = await db.run_p(
-      'INSERT INTO qarzlar (qarzdor_id, user_id, summa, valyuta, sana, muddat, sabab, mahsulot_id, qarz_raqam) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
-      [qarzdor_id, req.user.id, summa, valyuta || 'UZS', sana, muddat || null, sabab, mahsulot_id || null, nextNum]
+      `INSERT INTO qarzlar
+        (qarzdor_id, user_id, summa, valyuta, sana, muddat, sabab,
+         mahsulot_id, mahsulot_miqdor, mahsulot_birlik, qarz_raqam)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING id`,
+      [
+        qarzdor_id, req.user.id, summa,
+        valyuta || 'UZS', sana, muddat || null, sabab,
+        mahsulot_id || null,
+        mahsulot_miqdor ? Number(mahsulot_miqdor) : null,
+        mahsulotBirlik,
+        nextNum
+      ]
     );
 
     res.json({
       id: result.lastID,
       qarz_raqam: `QRZ-${String(nextNum).padStart(4, '0')}`,
-      message: "Qarz qo'shildi"
+      message: "Qarz qo'shildi",
+      qolgan_miqdor: qoladiMiqdor
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// To'lov qo'shish (mahsulot miqdoriga ta'sir qilmaydi)
+// To'lov qo'shish
 router.post('/:id/tolov', auth, async (req, res) => {
   try {
     const { summa, sana, izoh } = req.body;
@@ -171,7 +195,7 @@ router.post('/:id/tolov', auth, async (req, res) => {
 
     await db.run_p(
       'INSERT INTO tolovlar (qarz_id, summa, sana, izoh) VALUES ($1,$2,$3,$4)',
-      [req.params.id, summa, sana, izoh]
+      [req.params.id, summa, sana, izoh || '']
     );
 
     const tolovRow = await db.get_p(
@@ -223,7 +247,7 @@ router.put('/:id/close', auth, async (req, res) => {
   }
 });
 
-// Bitta qarzni olish
+// Bitta qarzni olish — mahsulot ma'lumotlari bilan
 router.get('/:id', auth, async (req, res) => {
   try {
     const qarz = await db.get_p(`
@@ -232,8 +256,12 @@ router.get('/:id', auth, async (req, res) => {
         GREATEST(0,
           qz.summa - COALESCE((SELECT SUM(t.summa) FROM tolovlar t WHERE t.qarz_id = qz.id), 0)
         ) as qolgan_summa,
-        (SELECT json_agg(t ORDER BY t.sana DESC) FROM tolovlar t WHERE t.qarz_id = qz.id) as tolovlar
+        (SELECT json_agg(t ORDER BY t.sana DESC) FROM tolovlar t WHERE t.qarz_id = qz.id) as tolovlar,
+        m.nomi as mahsulot_nomi,
+        COALESCE(m.emoji, '📦') as mahsulot_emoji,
+        m.birlik as mahsulot_birlik_asl
       FROM qarzlar qz
+      LEFT JOIN mahsulotlar m ON m.id = qz.mahsulot_id
       WHERE qz.id = $1 AND qz.user_id = $2
     `, [req.params.id, req.user.id]);
     if (!qarz) return res.status(404).json({ error: 'Qarz topilmadi' });
