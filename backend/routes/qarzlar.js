@@ -76,7 +76,7 @@ router.get('/naxt-sotuvlar', auth, async (req, res) => {
     const { sana } = req.query;
     let query = `
       SELECT ns.*,
-        COALESCE(m.nomi, 'O\'chirilgan mahsulot') as mahsulot_nomi,
+        COALESCE(m.nomi, 'Mahsulot') as mahsulot_nomi,
         COALESCE(m.birlik, 'dona') as birlik,
         COALESCE(m.emoji, '📦') as emoji
       FROM naxt_sotuvlar ns
