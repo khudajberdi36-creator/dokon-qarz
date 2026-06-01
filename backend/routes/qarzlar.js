@@ -185,10 +185,9 @@ router.post('/', auth, async (req, res) => {
     );
 
     res.json({
-      id: result.lastID,
+      id: result.lastID || result.rows?.[0]?.id,
       qarz_raqam: `QRZ-${String(nextNum).padStart(4, '0')}`,
-      message: "Qarz qo'shildi",
-      qolgan_miqdor: qoladiMiqdor
+      message: "Qarz qo'shildi"
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

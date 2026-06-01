@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
 import { exportQarzdorlarExcel, exportQarzdorlarPDF } from '../utils/export';
 import { useAuth } from '../context/AuthContext';
+import Avatar from '../components/Avatar';
 
 function formatSum(n) {
   if (!n) return '0';
@@ -21,7 +22,236 @@ function formatSumShort(n) {
   return String(num);
 }
 
-const COLORS = ['#ef4444', '#10b981', '#6366f1', '#f59e0b'];
+const COLORS = ['#ef4444', '#10b981', '#6366f1', '#f59e0b', '#8b5cf6'];
+
+// ✅ Qarzdorlar ro'yxati modali
+function QarzdorlarModal({ qarzdorlar, title, onClose }) {
+  const navigate = useNavigate();
+  const sorted = [...qarzdorlar].sort((a, b) => Number(b.jami_qarz) - Number(a.jami_qarz));
+  const jami = sorted.reduce((s, q) => s + Number(q.jami_qarz || 0), 0);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 640, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2>{title}</h2>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>
+              {sorted.length} ta qarzdor • Umumiy: <strong style={{ color: '#ef4444' }}>{formatSum(jami)} so'm</strong>
+            </div>
+          </div>
+          <button className="btn btn-secondary btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {sorted.length === 0 ? (
+            <div className="empty-state" style={{ padding: '40px 20px' }}>
+              <div style={{ fontSize: 36 }}>✅</div>
+              <h3>Qarzdor yo'q</h3>
+            </div>
+          ) : (
+            <table style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>#</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Ism</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Telefon</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Qarz</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((q, i) => (
+                  <tr
+                    key={q.id}
+                    style={{ cursor: 'pointer', borderTop: '1px solid var(--border)' }}
+                    onClick={() => { navigate(`/qarzdorlar/${q.id}`); onClose(); }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <td style={{ padding: '12px 16px', color: 'var(--text3)', fontSize: 12 }}>{i + 1}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar name={`${q.ism} ${q.familiya || ''}`} size={32} radius={8} fontSize={13} />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{q.ism} {q.familiya}</div>
+                          {q.manzil && <div style={{ fontSize: 11, color: 'var(--text3)' }}>📍 {q.manzil}</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <a href={`tel:${q.telefon}`} className="contact-link cl-phone" onClick={e => e.stopPropagation()}>
+                        📞 {q.telefon}
+                      </a>
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <span style={{ fontWeight: 800, color: Number(q.jami_qarz) > 0 ? '#ef4444' : '#10b981', fontFamily: 'JetBrains Mono, monospace' }}>
+                        {formatSum(q.jami_qarz)} so'm
+                      </span>
+                      <div style={{ fontSize: 11, color: 'var(--text3)' }}>{q.qarz_soni || 0} ta qarz</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Yopish</button>
+          <button className="btn btn-primary" onClick={() => { navigate('/qarzdorlar'); onClose(); }}>
+            👥 Barcha qarzdorlar →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ✅ Mahsulotlar statistika modali
+function MahsulotStatModal({ onClose, navigate }) {
+  const [davr, setDavr] = useState('oy');
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('top'); // top | naxt | qarz
+
+  useEffect(() => {
+    setLoading(true);
+    axios.get(`/api/stats/top-mahsulotlar?davr=${davr}&batafsil=1`)
+      .then(r => setData(r.data || []))
+      .catch(() => setData([]))
+      .finally(() => setLoading(false));
+  }, [davr]);
+
+  const jamiTushum = data.reduce((s, m) => s + Number(m.jami_summa || 0), 0);
+  const jamiMiqdor = data.reduce((s, m) => s + Number(m.jami_miqdor || 0), 0);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 700, maxHeight: '88vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2>📊 Mahsulotlar statistikasi</h2>
+            <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 2 }}>
+              Naxt sotuv + Qarz orqali sotilganlar
+            </div>
+          </div>
+          <button className="btn btn-secondary btn-icon" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Davr tanlash */}
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {[
+            { val: 'bugun', label: 'Bugun' },
+            { val: 'hafta', label: 'Hafta' },
+            { val: 'oy', label: 'Oy' },
+            { val: 'yil', label: 'Yil' },
+          ].map(d => (
+            <button
+              key={d.val}
+              className={`btn btn-sm ${davr === d.val ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setDavr(d.val)}
+            >
+              {d.label}
+            </button>
+          ))}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 16, fontSize: 13 }}>
+            <span>Jami tushum: <strong style={{ color: '#10b981' }}>{formatSum(jamiTushum)} so'm</strong></span>
+          </div>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px' }}>
+          {loading ? (
+            <div className="loading-page"><div className="spinner" /></div>
+          ) : data.length === 0 ? (
+            <div className="empty-state">
+              <div style={{ fontSize: 40 }}>📦</div>
+              <h3>Ma'lumot yo'q</h3>
+              <p>Bu davrda sotuv amalga oshirilmagan</p>
+            </div>
+          ) : (
+            <>
+              {/* Bar chart */}
+              <div style={{ marginBottom: 20 }}>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={data.slice(0, 10)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text2)' }} tickFormatter={formatSumShort} />
+                    <YAxis type="category" dataKey="nomi" tick={{ fontSize: 11, fill: 'var(--text)' }} width={90} />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
+                      formatter={(v) => [formatSum(v) + ' so\'m', 'Tushum']}
+                    />
+                    <Bar dataKey="jami_summa" radius={[0, 6, 6, 0]}>
+                      {data.slice(0, 10).map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Jadval */}
+              <table style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>#</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Mahsulot</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Miqdor</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Naxt</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Qarz</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Jami tushum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((m, i) => {
+                    const maxSum = data[0]?.jami_summa || 1;
+                    const foiz = Math.round((m.jami_summa / maxSum) * 100);
+                    return (
+                      <tr key={m.id} style={{ borderTop: '1px solid var(--border)' }}>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{
+                            width: 26, height: 26, borderRadius: '50%',
+                            background: COLORS[i % COLORS.length], display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', fontWeight: 800, color: 'white', fontSize: 12
+                          }}>{i + 1}</div>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{m.emoji || '📦'} {m.nomi}</div>
+                          <div style={{ background: 'var(--bg)', borderRadius: 20, height: 4, marginTop: 4, overflow: 'hidden', width: 120 }}>
+                            <div style={{ width: foiz + '%', height: '100%', background: COLORS[i % COLORS.length], borderRadius: 20 }} />
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
+                          {Number(m.jami_miqdor).toLocaleString()} {m.birlik}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, color: '#10b981', fontWeight: 600 }}>
+                          {formatSum(m.naxt_summa || 0)} so'm
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, color: '#6366f1', fontWeight: 600 }}>
+                          {formatSum(m.qarz_summa || 0)} so'm
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                          <span style={{ fontWeight: 800, color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: 14 }}>
+                            {formatSum(m.jami_summa)} so'm
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Yopish</button>
+          <button className="btn btn-primary" onClick={() => { navigate('/naxt-sotuv'); onClose(); }}>
+            💵 Naxt sotuv →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -31,6 +261,8 @@ export default function Dashboard() {
   const [topQarzdorlar, setTopQarzdorlar] = useState([]);
   const [topMahsulotlar, setTopMahsulotlar] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showQarzdorModal, setShowQarzdorModal] = useState(null); // null | 'barcha' | 'muddati'
+  const [showMahsulotStat, setShowMahsulotStat] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -61,8 +293,10 @@ export default function Dashboard() {
     { name: "To'langan", value: Number(stats?.tolov_qilingan || 0) },
   ].filter(d => d.value > 0);
 
-  // ✅ To'lov foizi progress
   const tolovFoizi = stats?.tolov_foizi || 0;
+
+  // Qarzdorlar filtrlash
+  const muddatiOtganQarzdorlar = allQarzdorlar.filter(q => Number(q.jami_qarz) > 0);
 
   return (
     <div>
@@ -81,36 +315,60 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats cards */}
+      {/* ✅ Stats cards — kliklash mumkin */}
       <div className="stats-grid">
-        <div className="stat-card purple">
+        <div
+          className="stat-card purple"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setShowQarzdorModal('barcha')}
+          title="Barcha qarzdorlarni ko'rish"
+        >
           <div className="stat-icon">🧾</div>
           <div className="stat-label">Jami qarzdorlar</div>
           <div className="stat-value">{stats?.jami_qarzdorlar || 0}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>Ko'rish →</div>
         </div>
-        <div className="stat-card red">
+        <div
+          className="stat-card red"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setShowQarzdorModal('qolgan')}
+          title="Qarz bo'lgan qarzdorlarni ko'rish"
+        >
           <div className="stat-icon">💸</div>
           <div className="stat-label">Qolgan qarz (UZS)</div>
           <div className="stat-value">{formatSum(stats?.qolgan_qarz)}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>Ko'rish →</div>
         </div>
         <div className="stat-card green">
           <div className="stat-icon">💚</div>
           <div className="stat-label">To'langan</div>
           <div className="stat-value">{formatSum(stats?.tolov_qilingan)}</div>
         </div>
-        <div className="stat-card orange">
+        <div
+          className="stat-card orange"
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate('/muddati-otgan')}
+          title="Muddati o'tganlarni ko'rish"
+        >
           <div className="stat-icon">⚠️</div>
           <div className="stat-label">Muddati o'tgan</div>
           <div className="stat-value">{stats?.muddati_otgan || 0}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>Ko'rish →</div>
         </div>
-        <div className="stat-card green">
+        <div
+          className="stat-card green"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setShowMahsulotStat(true)}
+          title="Tushum statistikasini ko'rish"
+        >
           <div className="stat-icon">💵</div>
           <div className="stat-label">Bugungi tushum</div>
           <div className="stat-value" style={{ fontSize: 16 }}>{formatSum(stats?.bugun_naxt_tushum)} so'm</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>Statistika →</div>
         </div>
       </div>
 
-      {/* ✅ YANGI: To'lov foizi progress bar */}
+      {/* To'lov foizi */}
       <div className="table-card" style={{ padding: '16px 20px', marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <span style={{ fontWeight: 700, fontSize: 14 }}>💹 To'lov foizi</span>
@@ -133,7 +391,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ✅ YANGI: Bugungi harakatlar */}
+      {/* Bugungi harakatlar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: 12, marginTop: 16 }}>
         <div className="table-card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 28 }}>📋</div>
@@ -203,11 +461,14 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ✅ YANGI: Top 5 qarzdor */}
+      {/* ✅ Top 5 qarzdor — kliklash mumkin */}
       {topQarzdorlar.length > 0 && (
         <div className="table-card" style={{ marginTop: 16 }}>
           <div className="table-header">
             <h3>🏆 Top 5 qarzdor</h3>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowQarzdorModal('qolgan')}>
+              Barchasini ko'rish
+            </button>
           </div>
           <div style={{ padding: '0 4px 8px' }}>
             {topQarzdorlar.map((q, i) => {
@@ -311,13 +572,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ✅ YANGI: Eng tez sotiladigan mahsulotlar */}
+      {/* ✅ Bugun eng ko'p sotiladigan mahsulotlar */}
       {topMahsulotlar.length > 0 && (
         <div className="table-card" style={{ marginTop: 16 }}>
           <div className="table-header">
             <h3>🔥 Bugun eng ko'p sotiladigan mahsulotlar</h3>
-            <button className="btn btn-secondary btn-sm" onClick={() => navigate('/naxt-sotuv')}>
-              💵 Naxt sotuv
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowMahsulotStat(true)}>
+              📊 Batafsil statistika
             </button>
           </div>
           <div style={{ padding: '0 4px 8px' }}>
@@ -362,12 +623,33 @@ export default function Dashboard() {
         <button className="btn btn-secondary" onClick={() => navigate('/naxt-sotuv')}>
           💵 Naxt sotuv
         </button>
+        <button className="btn btn-secondary" onClick={() => setShowMahsulotStat(true)}>
+          📊 Mahsulot statistika
+        </button>
         {stats?.muddati_otgan > 0 && (
           <button className="btn btn-danger" onClick={() => navigate('/muddati-otgan')}>
             ⏰ Muddati o'tganlar ({stats.muddati_otgan})
           </button>
         )}
       </div>
+
+      {/* Modals */}
+      {showQarzdorModal && (
+        <QarzdorlarModal
+          qarzdorlar={showQarzdorModal === 'qolgan'
+            ? allQarzdorlar.filter(q => Number(q.jami_qarz) > 0)
+            : allQarzdorlar
+          }
+          title={showQarzdorModal === 'qolgan' ? '💸 Qarz bo\'lgan qarzdorlar' : '🧾 Barcha qarzdorlar'}
+          onClose={() => setShowQarzdorModal(null)}
+        />
+      )}
+      {showMahsulotStat && (
+        <MahsulotStatModal
+          onClose={() => setShowMahsulotStat(false)}
+          navigate={navigate}
+        />
+      )}
     </div>
   );
 }

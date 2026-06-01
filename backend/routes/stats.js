@@ -147,10 +147,11 @@ router.get('/top-qarzdorlar', auth, async (req, res) => {
 // ✅ YANGI: Eng ko'p sotiladigan mahsulotlar (naxt + qarz orqali)
 router.get('/top-mahsulotlar', auth, async (req, res) => {
   try {
-    const { davr } = req.query; // 'bugun', 'hafta', 'oy'
+    const { davr } = req.query; // 'bugun', 'hafta', 'oy', 'yil'
     let intervalStr = "INTERVAL '30 days'";
     if (davr === 'bugun') intervalStr = "INTERVAL '1 day'";
     else if (davr === 'hafta') intervalStr = "INTERVAL '7 days'";
+    else if (davr === 'yil') intervalStr = "INTERVAL '365 days'";
 
     // Naxt sotuvlardan
     const naxtRows = await db.all_p(`
@@ -180,22 +181,37 @@ router.get('/top-mahsulotlar', auth, async (req, res) => {
       GROUP BY m.id, m.nomi, m.birlik, m.emoji
     `, [req.user.id]).catch(() => []);
 
-    // Birlashtirish
+    // Birlashtirish — naxt_summa va qarz_summa alohida
     const map = {};
     naxtRows.forEach(r => {
-      map[r.id] = { id: r.id, nomi: r.nomi, birlik: r.birlik, emoji: r.emoji, jami_miqdor: Number(r.jami_miqdor), jami_summa: Number(r.jami_summa), sotuv_soni: Number(r.sotuv_soni) };
+      map[r.id] = {
+        id: r.id, nomi: r.nomi, birlik: r.birlik, emoji: r.emoji,
+        jami_miqdor: Number(r.jami_miqdor),
+        jami_summa: Number(r.jami_summa),
+        naxt_summa: Number(r.jami_summa),
+        qarz_summa: 0,
+        sotuv_soni: Number(r.sotuv_soni)
+      };
     });
     qarzRows.forEach(r => {
       if (map[r.id]) {
         map[r.id].jami_miqdor += Number(r.jami_miqdor);
         map[r.id].jami_summa += Number(r.jami_summa);
+        map[r.id].qarz_summa += Number(r.jami_summa);
         map[r.id].sotuv_soni += Number(r.sotuv_soni);
       } else {
-        map[r.id] = { id: r.id, nomi: r.nomi, birlik: r.birlik, emoji: r.emoji, jami_miqdor: Number(r.jami_miqdor), jami_summa: Number(r.jami_summa), sotuv_soni: Number(r.sotuv_soni) };
+        map[r.id] = {
+          id: r.id, nomi: r.nomi, birlik: r.birlik, emoji: r.emoji,
+          jami_miqdor: Number(r.jami_miqdor),
+          jami_summa: Number(r.jami_summa),
+          naxt_summa: 0,
+          qarz_summa: Number(r.jami_summa),
+          sotuv_soni: Number(r.sotuv_soni)
+        };
       }
     });
 
-    const result = Object.values(map).sort((a, b) => b.jami_miqdor - a.jami_miqdor).slice(0, 10);
+    const result = Object.values(map).sort((a, b) => b.jami_summa - a.jami_summa).slice(0, 20);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
