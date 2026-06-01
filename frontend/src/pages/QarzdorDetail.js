@@ -8,9 +8,10 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
   const [form, setForm] = useState({
     summa: '', valyuta: 'UZS',
     sana: new Date().toISOString().split('T')[0],
-    muddat: '', sabab: ''
+    muddat: '', sabab: '', mahsulot_id: null, mahsulot_miqdor: 1
   });
   const [mahsulotlar, setMahsulotlar] = useState([]);
+  const [selectedMahsulot, setSelectedMahsulot] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -21,18 +22,43 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
   const handleMahsulot = (e) => {
     const m = mahsulotlar.find(m => String(m.id) === e.target.value);
     if (m) {
-      setForm(f => ({ ...f, mahsulot_id: m.id, summa: String(m.narx), sabab: m.nomi, mahsulot_miqdor: 1, _mahsulot: m }));
+      setSelectedMahsulot(m);
+      setForm(f => ({
+        ...f,
+        mahsulot_id: m.id,
+        summa: String(Number(m.narx) * Number(f.mahsulot_miqdor || 1)),
+        sabab: m.nomi,
+        mahsulot_miqdor: 1
+      }));
     } else {
-      setForm(f => ({ ...f, mahsulot_id: null, mahsulot_miqdor: '', _mahsulot: null }));
+      setSelectedMahsulot(null);
+      setForm(f => ({ ...f, mahsulot_id: null, mahsulot_miqdor: 1 }));
     }
+  };
+
+  const handleMiqdor = (val) => {
+    const miqdor = Number(val) || 1;
+    setForm(f => ({
+      ...f,
+      mahsulot_miqdor: miqdor,
+      summa: selectedMahsulot ? String(Number(selectedMahsulot.narx) * miqdor) : f.summa
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.summa) return setError("Summa kiritilmadi");
+    if (selectedMahsulot && Number(form.mahsulot_miqdor) > Number(selectedMahsulot.miqdor)) {
+      return setError(`Yetarli mahsulot yo'q! Mavjud: ${selectedMahsulot.miqdor} ${selectedMahsulot.birlik}`);
+    }
     setLoading(true);
     try {
-      await axios.post('/api/qarzlar', { ...form, qarzdor_id: qarzdorId, summa: Number(form.summa), mahsulot_miqdor: Number(form.mahsulot_miqdor) || 1 });
+      await axios.post('/api/qarzlar', {
+        ...form,
+        qarzdor_id: qarzdorId,
+        summa: Number(form.summa),
+        mahsulot_miqdor: Number(form.mahsulot_miqdor) || 1
+      });
       onSuccess();
     } catch (err) {
       setError(err.response?.data?.error || "Xatolik");
@@ -49,18 +75,49 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
             {error && <div className="error-msg">⚠️ {error}</div>}
-            {/* ✅ YANGI: Mahsulotdan tanlash */}
+            {/* Mahsulotdan tanlash */}
             {mahsulotlar.length > 0 && (
               <div className="form-group">
                 <label className="form-label">📦 Mahsulotdan tanlash (ixtiyoriy)</label>
                 <select onChange={handleMahsulot} className="form-input" defaultValue="">
                   <option value="">— Qo'lda kiritish —</option>
                   {mahsulotlar.map(m => (
-                    <option key={m.id} value={m.id}>
-                      {m.emoji || '📦'} {m.nomi} — {formatSum(m.narx)} so'm (Qoldi: {m.miqdor} {m.birlik})
+                    <option key={m.id} value={m.id} disabled={Number(m.miqdor) <= 0}>
+                      {m.emoji || '📦'} {m.nomi} — {formatSum(m.narx)} so'm
+                      {' '}(Qoldi: {m.miqdor} {m.birlik}){Number(m.miqdor) <= 0 ? ' [TUGAGAN]' : ''}
                     </option>
                   ))}
                 </select>
+                {selectedMahsulot && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: Number(selectedMahsulot.miqdor) < 5 ? '#f59e0b' : 'var(--text3)' }}>
+                    📦 Mavjud: <strong>{selectedMahsulot.miqdor} {selectedMahsulot.birlik}</strong>
+                    {' '}| Narxi: <strong>{formatSum(selectedMahsulot.narx)} so'm</strong>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Mahsulot tanlanganda miqdor so'ralsin */}
+            {selectedMahsulot && (
+              <div className="form-group">
+                <label className="form-label">📊 Miqdor ({selectedMahsulot.birlik}) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={selectedMahsulot.miqdor}
+                  step="1"
+                  value={form.mahsulot_miqdor}
+                  onChange={e => handleMiqdor(e.target.value)}
+                  className="form-input"
+                  required
+                />
+                {Number(form.mahsulot_miqdor) > Number(selectedMahsulot.miqdor) && (
+                  <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
+                    ⚠️ Yetarli emas! Mavjud: {selectedMahsulot.miqdor} {selectedMahsulot.birlik}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 4 }}>
+                  Jami: {form.mahsulot_miqdor} × {formatSum(selectedMahsulot.narx)} = <strong style={{ color: 'var(--text)' }}>{formatSum(Number(selectedMahsulot.narx) * Number(form.mahsulot_miqdor))} so'm</strong>
+                </div>
               </div>
             )}
             <div className="form-row">
