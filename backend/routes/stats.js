@@ -16,7 +16,7 @@ router.get('/', auth, async (req, res) => {
       SELECT COALESCE(SUM(t.summa), 0) as total
       FROM tolovlar t
       JOIN qarzlar q ON t.qarz_id = q.id
-      WHERE q.user_id = $1 AND q.status = 'active'
+      WHERE q.user_id = $1
     `, [req.user.id]);
     const r4 = await db.get_p(`
       SELECT COUNT(*) as c FROM qarzlar
@@ -45,9 +45,21 @@ router.get('/', auth, async (req, res) => {
       WHERE user_id = $1 AND sana = CURRENT_DATE
     `, [req.user.id]).catch(() => ({ jami: 0, soni: 0 }));
 
-    const jami_qarz = Number(r2.total);
-    const tolov_qilingan = Number(r3.total);
-    const tolov_foizi = jami_qarz > 0
+    const jami_qarz = Number(r2.total);      // active qarzlar jami
+    const tolov_qilingan = Number(r3.total); // barcha to'lovlar jami
+
+    // Qolgan qarz = active qarzlar - ular bo'yicha to'lovlar
+    const r_qolgan = await db.get_p(`
+      SELECT COALESCE(SUM(qz.summa), 0) - COALESCE(SUM(t_summa.paid), 0) AS qolgan
+      FROM qarzlar qz
+      LEFT JOIN (
+        SELECT qarz_id, SUM(summa) AS paid FROM tolovlar GROUP BY qarz_id
+      ) t_summa ON t_summa.qarz_id = qz.id
+      WHERE qz.user_id = $1 AND qz.status = 'active'
+    `, [req.user.id]);
+    const qolgan_qarz = Math.max(0, Number(r_qolgan?.qolgan || 0));
+
+    const tolov_foizi = (jami_qarz + tolov_qilingan) > 0
       ? Math.round((tolov_qilingan / (jami_qarz + tolov_qilingan)) * 100)
       : 0;
 
@@ -55,7 +67,7 @@ router.get('/', auth, async (req, res) => {
       jami_qarzdorlar: Number(r1.c),
       jami_qarz,
       tolov_qilingan,
-      qolgan_qarz: Math.max(0, jami_qarz - tolov_qilingan),
+      qolgan_qarz,
       muddati_otgan: Number(r4.c),
       yangi_qarzlar: Number(r5.c),
       bugun_tolovlar: Number(bugun_tolov.c),
