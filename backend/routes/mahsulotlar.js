@@ -7,7 +7,11 @@ const auth = require('../middleware/auth');
 router.get('/kategoriyalar', auth, async (req, res) => {
   try {
     const rows = await db.all_p(
-      'SELECT k.*, COUNT(m.id) as mahsulot_soni, COALESCE(SUM(m.narx * m.miqdor), 0) as umumiy_qiymat FROM kategoriyalar k LEFT JOIN mahsulotlar m ON m.kategoriya_id = k.id AND m.user_id = $1 WHERE k.user_id = $1 GROUP BY k.id ORDER BY k.nomi',
+      `SELECT k.*, COUNT(m.id) as mahsulot_soni, COALESCE(SUM(m.narx * m.miqdor), 0) as umumiy_qiymat
+       FROM kategoriyalar k
+       LEFT JOIN mahsulotlar m ON m.kategoriya_id = k.id AND m.user_id = $1
+       WHERE k.user_id = $1
+       GROUP BY k.id ORDER BY k.nomi`,
       [req.user.id]
     );
     res.json(rows);
@@ -46,7 +50,9 @@ router.get('/', auth, async (req, res) => {
   const { kategoriya_id, search } = req.query;
   try {
     let query = `
-      SELECT m.*, k.nomi as kategoriya_nomi, k.emoji, k.rang,
+      SELECT m.*,
+        COALESCE(m.emoji, k.emoji, '📦') as emoji,
+        k.nomi as kategoriya_nomi, k.rang,
         (m.narx * m.miqdor) as umumiy_qiymat
       FROM mahsulotlar m
       LEFT JOIN kategoriyalar k ON k.id = m.kategoriya_id
@@ -63,14 +69,55 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Inventar statistikasi (stats dan oldin bo'lishi kerak)
+router.get('/stats', auth, async (req, res) => {
+  try {
+    const umumiy = await db.get_p(
+      'SELECT COUNT(*) as jami_mahsulot, COALESCE(SUM(narx * miqdor), 0) as umumiy_qiymat, COALESCE(SUM(miqdor), 0) as jami_miqdor FROM mahsulotlar WHERE user_id=$1',
+      [req.user.id]
+    );
+    const kategoriyalar = await db.all_p(
+      `SELECT k.nomi, COALESCE(k.emoji,'📦') as emoji, k.rang,
+        COUNT(m.id) as mahsulot_soni, COALESCE(SUM(m.narx * m.miqdor), 0) as qiymat
+       FROM kategoriyalar k
+       LEFT JOIN mahsulotlar m ON m.kategoriya_id=k.id AND m.user_id=$1
+       WHERE k.user_id=$1
+       GROUP BY k.id, k.nomi, k.emoji, k.rang ORDER BY qiymat DESC`,
+      [req.user.id]
+    );
+    res.json({ ...umumiy, kategoriyalar });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Kam qolgan mahsulotlar ogohlantirishlari
+router.get('/ogohlantirish', auth, async (req, res) => {
+  try {
+    const rows = await db.all_p(
+      `SELECT m.*, COALESCE(m.emoji, k.emoji, '📦') as emoji, k.nomi as kategoriya_nomi
+       FROM mahsulotlar m
+       LEFT JOIN kategoriyalar k ON k.id = m.kategoriya_id
+       WHERE m.user_id = $1
+         AND m.miqdor <= COALESCE(m.ogohlantirish_chegara, 5)
+         AND COALESCE(m.ogohlantirish_chegara, 5) > 0
+       ORDER BY m.miqdor ASC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Mahsulot qo'shish
 router.post('/', auth, async (req, res) => {
-  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh } = req.body;
-  if (!nomi || !narx) return res.status(400).json({ error: 'Nomi va narx kerak' });
+  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji } = req.body;
+  if (!nomi || narx === undefined) return res.status(400).json({ error: 'Nomi va narx kerak' });
   try {
     const row = await db.run_p(
-      'INSERT INTO mahsulotlar (user_id, kategoriya_id, nomi, narx, miqdor, birlik, izoh) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-      [req.user.id, kategoriya_id || null, nomi, narx, miqdor || 0, birlik || 'dona', izoh || '']
+      'INSERT INTO mahsulotlar (user_id, kategoriya_id, nomi, narx, miqdor, birlik, izoh, emoji) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+      [req.user.id, kategoriya_id || null, nomi, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦']
     );
     res.json(row.rows[0]);
   } catch (err) {
@@ -80,11 +127,11 @@ router.post('/', auth, async (req, res) => {
 
 // Mahsulot tahrirlash
 router.put('/:id', auth, async (req, res) => {
-  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh } = req.body;
+  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji } = req.body;
   try {
     const row = await db.run_p(
-      'UPDATE mahsulotlar SET nomi=$1, kategoriya_id=$2, narx=$3, miqdor=$4, birlik=$5, izoh=$6 WHERE id=$7 AND user_id=$8 RETURNING *',
-      [nomi, kategoriya_id || null, narx, miqdor || 0, birlik || 'dona', izoh || '', req.params.id, req.user.id]
+      'UPDATE mahsulotlar SET nomi=$1, kategoriya_id=$2, narx=$3, miqdor=$4, birlik=$5, izoh=$6, emoji=$7 WHERE id=$8 AND user_id=$9 RETURNING *',
+      [nomi, kategoriya_id || null, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', req.params.id, req.user.id]
     );
     res.json(row.rows[0]);
   } catch (err) {
@@ -102,42 +149,4 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// Inventar statistikasi
-router.get('/stats', auth, async (req, res) => {
-  try {
-    const umumiy = await db.get_p(
-      'SELECT COUNT(*) as jami_mahsulot, COALESCE(SUM(narx * miqdor), 0) as umumiy_qiymat, COALESCE(SUM(miqdor), 0) as jami_miqdor FROM mahsulotlar WHERE user_id=$1',
-      [req.user.id]
-    );
-    const kategoriyalar = await db.all_p(
-      `SELECT k.nomi, k.emoji, k.rang, COUNT(m.id) as mahsulot_soni, COALESCE(SUM(m.narx * m.miqdor), 0) as qiymat
-       FROM kategoriyalar k LEFT JOIN mahsulotlar m ON m.kategoriya_id=k.id AND m.user_id=$1
-       WHERE k.user_id=$1 GROUP BY k.id, k.nomi, k.emoji, k.rang ORDER BY qiymat DESC`,
-      [req.user.id]
-    );
-    res.json({ ...umumiy, kategoriyalar });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 module.exports = router;
-// ✅ YANGI: Kam qolgan mahsulotlar
-// (GET /api/mahsulotlar/ogohlantirish)
-router.get('/ogohlantirish', auth, async (req, res) => {
-  try {
-    const rows = await db.all_p(
-      `SELECT m.*, k.emoji, k.nomi as kategoriya_nomi
-       FROM mahsulotlar m
-       LEFT JOIN kategoriyalar k ON k.id = m.kategoriya_id
-       WHERE m.user_id = $1
-         AND m.miqdor <= m.ogohlantirish_chegara
-         AND m.ogohlantirish_chegara > 0
-       ORDER BY m.miqdor ASC`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});

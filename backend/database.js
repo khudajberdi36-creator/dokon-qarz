@@ -22,6 +22,7 @@ const db = {
 };
 
 async function initDB() {
+  // Asosiy jadvallar
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -90,6 +91,7 @@ async function initDB() {
       miqdor NUMERIC NOT NULL DEFAULT 0,
       birlik TEXT DEFAULT 'dona',
       ogohlantirish_chegara INTEGER DEFAULT 5,
+      emoji TEXT DEFAULT '📦',
       izoh TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -118,14 +120,36 @@ async function initDB() {
     );
   `);
 
-  // Yangi ustunlarni qo'shish (eski DB uchun)
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';`).catch(() => {});
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT 'Foydalanuvchi';`).catch(() => {});
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dokon_nomi TEXT DEFAULT 'Dokon';`).catch(() => {});
-  await pool.query(`ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS mahsulot_id INTEGER;`).catch(() => {});
-  await pool.query(`ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS qarz_raqam INTEGER DEFAULT 0;`).catch(() => {});
-  await pool.query(`ALTER TABLE qarzdorlar ADD COLUMN IF NOT EXISTS eslatma TEXT;`).catch(() => {});
-  await pool.query(`ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS ogohlantirish_chegara INTEGER DEFAULT 5;`).catch(() => {});
+  // ✅ Eski DB uchun ustunlarni qo'shish (IF NOT EXISTS - xato bermaydi)
+  const migrations = [
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name TEXT DEFAULT 'Foydalanuvchi'`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS dokon_nomi TEXT DEFAULT 'Dokon'`,
+    `ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS mahsulot_id INTEGER`,
+    `ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS qarz_raqam INTEGER DEFAULT 0`,
+    `ALTER TABLE qarzdorlar ADD COLUMN IF NOT EXISTS eslatma TEXT`,
+    `ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS ogohlantirish_chegara INTEGER DEFAULT 5`,
+    `ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS emoji TEXT DEFAULT '📦'`,
+    // naxt_sotuvlar jadvali mavjud bo'lmasa CREATE qiladi (yuqorida allaqachon)
+    // Lekin eski DB larda yo'q bo'lishi mumkin - shuning uchun alohida yaratamiz:
+    `CREATE TABLE IF NOT EXISTS naxt_sotuvlar (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      mahsulot_id INTEGER REFERENCES mahsulotlar(id) ON DELETE SET NULL,
+      miqdor NUMERIC NOT NULL DEFAULT 1,
+      narx NUMERIC NOT NULL DEFAULT 0,
+      jami_summa NUMERIC NOT NULL DEFAULT 0,
+      sana DATE NOT NULL,
+      izoh TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`,
+  ];
+
+  for (const sql of migrations) {
+    await pool.query(sql).catch(err => {
+      console.log('Migration skip:', err.message.substring(0, 60));
+    });
+  }
 
   console.log('✅ Database tayyor');
   await seedUsers();
