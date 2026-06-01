@@ -9,14 +9,25 @@ router.get('/', auth, async (req, res) => {
     const rows = await db.all_p(`
       SELECT q.*,
         GREATEST(0,
-          COALESCE((SELECT SUM(qz.summa) FROM qarzlar qz WHERE qz.qarzdor_id = q.id AND qz.user_id = $1 AND qz.status = 'active'), 0) -
-          COALESCE((SELECT SUM(t.summa) FROM tolovlar t JOIN qarzlar qz2 ON t.qarz_id = qz2.id WHERE qz2.qarzdor_id = q.id AND qz2.user_id = $2), 0)
+          COALESCE((
+            SELECT SUM(qz_a.summa)
+            FROM qarzlar qz_a
+            WHERE qz_a.qarzdor_id = q.id AND qz_a.user_id = $1 AND qz_a.status = 'active'
+          ), 0) -
+          COALESCE((
+            SELECT SUM(t.summa)
+            FROM tolovlar t
+            JOIN qarzlar qz_b ON t.qarz_id = qz_b.id
+            WHERE qz_b.qarzdor_id = q.id AND qz_b.user_id = $2
+          ), 0)
         ) AS jami_qarz,
-        COUNT(DISTINCT qz.id) as qarz_soni
+        (
+          SELECT COUNT(*)
+          FROM qarzlar qz_c
+          WHERE qz_c.qarzdor_id = q.id AND qz_c.user_id = $3 AND qz_c.status = 'active'
+        ) as qarz_soni
       FROM qarzdorlar q
-      LEFT JOIN qarzlar qz ON qz.qarzdor_id = q.id AND qz.user_id = $3 AND qz.status = 'active'
       WHERE q.user_id = $4
-      GROUP BY q.id
       ORDER BY jami_qarz DESC
     `, [req.user.id, req.user.id, req.user.id, req.user.id]);
     res.json(rows);

@@ -12,7 +12,7 @@ router.get('/', auth, async (req, res) => {
       SELECT COALESCE(SUM(t.summa), 0) as total
       FROM tolovlar t
       JOIN qarzlar q ON t.qarz_id = q.id
-      WHERE q.user_id = $1
+      WHERE q.user_id = $1 AND q.status = 'active'
     `, [req.user.id]);
     const r4 = await db.get_p(`
       SELECT COUNT(*) as c FROM qarzlar
