@@ -507,6 +507,14 @@ export default function QarzdorDetail() {
                     </span>
                   )}
                   <span className="qarz-item-sabab">{qarz.sabab || "Sabab ko'rsatilmagan"}</span>
+                  {qarz.mahsulot_nomi && (
+                    <span style={{
+                      fontSize: 11, background: 'rgba(99,102,241,0.15)', color: '#818cf8',
+                      padding: '2px 8px', borderRadius: 6, fontWeight: 600, marginLeft: 4
+                    }}>
+                      {qarz.mahsulot_emoji} {qarz.mahsulot_nomi}
+                    </span>
+                  )}
                 </div>
                 <div className="qarz-item-date">
                   📅 {new Date(qarz.sana).toLocaleDateString('uz-UZ')}

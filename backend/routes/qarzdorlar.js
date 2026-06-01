@@ -61,8 +61,12 @@ router.get('/:id', auth, async (req, res) => {
         GREATEST(0,
           qz.summa - COALESCE((SELECT SUM(t.summa) FROM tolovlar t WHERE t.qarz_id = qz.id), 0)
         ) as qolgan_summa,
-        (SELECT json_agg(t ORDER BY t.sana DESC) FROM tolovlar t WHERE t.qarz_id = qz.id) as tolovlar
+        (SELECT json_agg(t ORDER BY t.sana DESC) FROM tolovlar t WHERE t.qarz_id = qz.id) as tolovlar,
+        m.nomi as mahsulot_nomi,
+        m.birlik as mahsulot_birlik,
+        COALESCE(m.emoji, '📦') as mahsulot_emoji
       FROM qarzlar qz
+      LEFT JOIN mahsulotlar m ON m.id = qz.mahsulot_id
       WHERE qz.qarzdor_id = $1 AND qz.user_id = $2
       ORDER BY qz.created_at DESC
     `, [req.params.id, req.user.id]);
