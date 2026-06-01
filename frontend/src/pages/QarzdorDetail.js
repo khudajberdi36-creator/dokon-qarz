@@ -41,7 +41,13 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
 
   // Miqdor step — kasrli bo'lsa 0.1, aks holda 1
   const getMiqdorStep = (birlik) => {
-    const kasrlilar = ['g','kg','litr','ml','metr','sm','m2','0.5l','0.75l','1l','1.5l','2l','3l','5l','10l','19l'];
+    // Faqat og'irlik va hajm birliklari kasr qabul qiladi
+    const kasrlilar = ['g','kg','litr','ml','metr','sm','m2'];
+    return kasrlilar.includes(birlik) ? 'any' : '1';
+  };
+
+  const getMiqdorMin = (birlik) => {
+    const kasrlilar = ['g','kg','litr','ml','metr','sm','m2'];
     return kasrlilar.includes(birlik) ? '0.001' : '1';
   };
 
@@ -67,10 +73,13 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
 
   const handleMiqdor = (val) => {
     const miqdor = parseFloat(val) || 1;
+    const yangiSumma = selectedMahsulot
+      ? String(Number(selectedMahsulot.narx) * miqdor)
+      : null;
     setForm(f => ({
       ...f,
       mahsulot_miqdor: miqdor,
-      summa: selectedMahsulot ? String(Number(selectedMahsulot.narx) * miqdor) : f.summa
+      ...(yangiSumma !== null ? { summa: yangiSumma } : {})
     }));
   };
 
@@ -157,25 +166,41 @@ function AddQarzModal({ qarzdorId, onClose, onSuccess }) {
                   <label className="form-label">
                     Nechta / qancha ({birlikLabel(selectedMahsulot.birlik)})
                   </label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      type="number"
-                      min="0.001"
-                      max={selectedMahsulot.miqdor}
-                      step={getMiqdorStep(selectedMahsulot.birlik)}
-                      value={form.mahsulot_miqdor}
-                      onChange={e => handleMiqdor(e.target.value)}
-                      className="form-input"
-                      style={{ width: 120 }}
-                    />
-                    <span style={{ fontSize: 13, color: 'var(--text2)' }}>
+                  {/* +/- tugmali miqdor input */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--bg)' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleMiqdor(Math.max(getMiqdorMin(selectedMahsulot.birlik), Number(form.mahsulot_miqdor) - 1))}
+                        style={{ width: 38, height: 42, border: 'none', background: 'var(--bg3)', cursor: 'pointer', fontSize: 18, color: 'var(--text)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >−</button>
+                      <input
+                        type="number"
+                        min={getMiqdorMin(selectedMahsulot.birlik)}
+                        max={selectedMahsulot.miqdor}
+                        step={getMiqdorStep(selectedMahsulot.birlik)}
+                        value={form.mahsulot_miqdor}
+                        onChange={e => handleMiqdor(e.target.value)}
+                        style={{ width: 80, height: 42, border: 'none', textAlign: 'center', fontWeight: 700, fontSize: 16, background: 'transparent', color: 'var(--text)', outline: 'none' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleMiqdor(Math.min(Number(selectedMahsulot.miqdor), Number(form.mahsulot_miqdor) + 1))}
+                        style={{ width: 38, height: 42, border: 'none', background: 'var(--bg3)', cursor: 'pointer', fontSize: 18, color: 'var(--text)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >＋</button>
+                    </div>
+                    <span style={{ fontSize: 13, color: 'var(--text2)', fontWeight: 600 }}>
                       {birlikLabel(selectedMahsulot.birlik)}
                     </span>
-                    <span style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 'auto' }}>
-                      = <strong style={{ color: 'var(--text)', fontSize: 14 }}>
-                        {formatSum(Number(selectedMahsulot.narx) * Number(form.mahsulot_miqdor))} so'm
-                      </strong>
+                  </div>
+                  {/* Avtomatik summa ko'rsatish */}
+                  <div style={{ marginTop: 10, padding: '10px 14px', background: 'rgba(99,102,241,0.08)', borderRadius: 8, border: '1px solid rgba(99,102,241,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text2)' }}>
+                      {form.mahsulot_miqdor} × {formatSum(selectedMahsulot.narx)} so'm
                     </span>
+                    <strong style={{ fontSize: 16, color: 'var(--accent2)' }}>
+                      = {formatSum(Number(selectedMahsulot.narx) * Number(form.mahsulot_miqdor))} so'm
+                    </strong>
                   </div>
                   {Number(form.mahsulot_miqdor) > Number(selectedMahsulot.miqdor) && (
                     <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
