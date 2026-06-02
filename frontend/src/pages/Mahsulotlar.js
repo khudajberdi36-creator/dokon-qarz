@@ -47,11 +47,45 @@ function getBirlikLabel(value) {
 
 const EMOJIS = ['📦','🥤','🍬','🍫','🥛','🍞','🧴','🧹','❄️','🔧','👕','📱','🍎','🥩','🧆','☕','🍵','🧃','🍺','🥫','🧂','🫙','🛒','🏠'];
 
+// ===================== MAHSULOT BARCODE TEKSHIRUVI =====================
+// Faqat savdo barcodelarini qabul qilish — URL, kanal, telegram linklar RAD etiladi
+function isMahsulotBarcode(text) {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.trim();
+
+  // URL va linklar — RAD
+  if (/^https?:\/\//i.test(t)) return false;
+  if (/^t\.me\//i.test(t)) return false;
+  if (/^telegram\./i.test(t)) return false;
+  if (/^@/i.test(t)) return false;
+  if (t.includes('://')) return false;
+  if (t.includes('.com') || t.includes('.ru') || t.includes('.uz') || t.includes('.net') || t.includes('.org')) return false;
+
+  // Savdo barcodelar — QABUL
+  // EAN-13: 13 raqam
+  if (/^\d{13}$/.test(t)) return true;
+  // EAN-8: 8 raqam
+  if (/^\d{8}$/.test(t)) return true;
+  // UPC-A: 12 raqam
+  if (/^\d{12}$/.test(t)) return true;
+  // UPC-E: 6-8 raqam
+  if (/^\d{6,8}$/.test(t)) return true;
+  // CODE-128 / CODE-39: harflar va raqamlar, odatda qisqa
+  if (/^[A-Z0-9\-\.\s\$\/\+\%]{4,30}$/.test(t)) return true;
+  // ITF: juft raqamlar
+  if (/^\d{4,20}$/.test(t)) return true;
+  // DATA MATRIX / QR — faqat qisqa raqamli yoki kod
+  if (/^[A-Za-z0-9]{4,25}$/.test(t) && !/\s/.test(t)) return true;
+
+  return false;
+}
+
 // ===================== QR SKANER =====================
 function QrSkanerModal({ onResult, onClose }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const readerRef = useRef(null);
+  const animRef = useRef(null);
   const [status, setStatus] = useState('Kamera ochilmoqda...');
   const [manualInput, setManualInput] = useState('');
   const [useManual, setUseManual] = useState(false);
@@ -61,18 +95,6 @@ function QrSkanerModal({ onResult, onClose }) {
 
     async function startScanner() {
       try {
-        // ZXing kutubxonasini dinamik yuklash
-        if (!window.ZXing) {
-          setStatus('Skaner kutubxonasi yuklanmoqda...');
-          await new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
-            script.onload = resolve;
-            script.onerror = () => reject(new Error('Kutubxona yuklanmadi'));
-            document.head.appendChild(script);
-          });
-        }
-
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
         });
@@ -83,17 +105,61 @@ function QrSkanerModal({ onResult, onClose }) {
           await videoRef.current.play();
         }
 
+        // 1-usul: Native BarcodeDetector (tez, zamonaviy brauzerlar)
+        if (window.BarcodeDetector) {
+          const detector = new window.BarcodeDetector({
+            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf', 'data_matrix', 'qr_code']
+          });
+          setStatus('📷 Shtrix-kodni kameraga tutib turing...');
+
+          async function detectFrame() {
+            if (stopped || !videoRef.current) return;
+            try {
+              const barcodes = await detector.detect(videoRef.current);
+              if (barcodes.length > 0) {
+                const text = barcodes[0].rawValue;
+                if (isMahsulotBarcode(text)) {
+                  stopped = true;
+                  stopAll();
+                  onResult(text);
+                  return;
+                } else {
+                  setStatus('⚠️ Bu mahsulot kodi emas. Qayta skanerlang...');
+                  setTimeout(() => {
+                    if (!stopped) setStatus('📷 Shtrix-kodni kameraga tutib turing...');
+                  }, 1500);
+                }
+              }
+            } catch {}
+            if (!stopped) animRef.current = requestAnimationFrame(detectFrame);
+          }
+          animRef.current = requestAnimationFrame(detectFrame);
+          return;
+        }
+
+        // 2-usul: ZXing fallback (agar BarcodeDetector yo'q bo'lsa)
+        if (!window.ZXing) {
+          setStatus('Skaner yuklanmoqda...');
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('Kutubxona yuklanmadi'));
+            document.head.appendChild(script);
+          });
+        }
+
         const hints = new Map();
         const formats = [
           window.ZXing.BarcodeFormat.EAN_13,
           window.ZXing.BarcodeFormat.EAN_8,
           window.ZXing.BarcodeFormat.CODE_128,
           window.ZXing.BarcodeFormat.CODE_39,
-          window.ZXing.BarcodeFormat.QR_CODE,
           window.ZXing.BarcodeFormat.UPC_A,
           window.ZXing.BarcodeFormat.UPC_E,
           window.ZXing.BarcodeFormat.ITF,
           window.ZXing.BarcodeFormat.DATA_MATRIX,
+          window.ZXing.BarcodeFormat.QR_CODE,
         ];
         hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
         hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
@@ -106,12 +172,19 @@ function QrSkanerModal({ onResult, onClose }) {
           if (stopped) return;
           if (result) {
             const text = result.getText();
-            setStatus(`✅ Topildi: ${text}`);
-            stopped = true;
-            stopAll();
-            onResult(text);
+            if (isMahsulotBarcode(text)) {
+              stopped = true;
+              stopAll();
+              onResult(text);
+            } else {
+              setStatus('⚠️ Bu mahsulot kodi emas. Qayta skanerlang...');
+              setTimeout(() => {
+                if (!stopped) setStatus('📷 Shtrix-kodni kameraga tutib turing...');
+              }, 1500);
+            }
           }
         });
+
       } catch (err) {
         if (!stopped) {
           console.error('Kamera xatosi:', err);
@@ -122,6 +195,7 @@ function QrSkanerModal({ onResult, onClose }) {
     }
 
     function stopAll() {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
       if (readerRef.current) {
         try { readerRef.current.reset(); } catch {}
       }
@@ -188,7 +262,12 @@ function QrSkanerModal({ onResult, onClose }) {
                 onChange={e => setManualInput(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && manualInput.trim()) {
-                    onResult(manualInput.trim());
+                    const val = manualInput.trim();
+                    if (!isMahsulotBarcode(val)) {
+                      setStatus('⚠️ Bu mahsulot kodi emas!');
+                      return;
+                    }
+                    onResult(val);
                     onClose();
                   }
                 }}
@@ -198,7 +277,15 @@ function QrSkanerModal({ onResult, onClose }) {
               <button
                 className="btn btn-primary"
                 disabled={!manualInput.trim()}
-                onClick={() => { onResult(manualInput.trim()); onClose(); }}
+                onClick={() => {
+                  const val = manualInput.trim();
+                  if (!isMahsulotBarcode(val)) {
+                    setStatus('⚠️ Bu mahsulot kodi emas!');
+                    return;
+                  }
+                  onResult(val);
+                  onClose();
+                }}
               >
                 ✓
               </button>
