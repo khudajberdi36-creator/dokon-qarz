@@ -92,6 +92,7 @@ async function initDB() {
       birlik TEXT DEFAULT 'dona',
       ogohlantirish_chegara INTEGER DEFAULT 5,
       emoji TEXT DEFAULT '📦',
+      barcode TEXT,
       izoh TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -153,6 +154,7 @@ async function initDB() {
     });
   }
 
+  await pool.query(`ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS barcode TEXT;`).catch(() => {});
   console.log('✅ Database tayyor');
   await seedUsers();
 }

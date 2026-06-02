@@ -15,12 +15,9 @@ router.get('/kategoriyalar', auth, async (req, res) => {
       [req.user.id]
     );
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Kategoriya qo'shish
 router.post('/kategoriyalar', auth, async (req, res) => {
   const { nomi, rang, emoji } = req.body;
   if (!nomi) return res.status(400).json({ error: 'Kategoriya nomi kerak' });
@@ -30,19 +27,14 @@ router.post('/kategoriyalar', auth, async (req, res) => {
       [req.user.id, nomi, rang || '#6366f1', emoji || '📦']
     );
     res.json(row.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Kategoriya o'chirish
 router.delete('/kategoriyalar/:id', auth, async (req, res) => {
   try {
     await db.run_p('DELETE FROM kategoriyalar WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
     res.json({ message: "O'chirildi" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Barcha mahsulotlar
@@ -60,16 +52,14 @@ router.get('/', auth, async (req, res) => {
     `;
     const params = [req.user.id];
     if (kategoriya_id) { params.push(kategoriya_id); query += ` AND m.kategoriya_id = $${params.length}`; }
-    if (search) { params.push(`%${search}%`); query += ` AND m.nomi ILIKE $${params.length}`; }
+    if (search) { params.push(`%${search}%`); query += ` AND (m.nomi ILIKE $${params.length} OR m.barcode ILIKE $${params.length})`; }
     query += ' ORDER BY m.nomi';
     const rows = await db.all_p(query, params);
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Inventar statistikasi (stats dan oldin bo'lishi kerak)
+// Statistika
 router.get('/stats', auth, async (req, res) => {
   try {
     const umumiy = await db.get_p(
@@ -86,12 +76,10 @@ router.get('/stats', auth, async (req, res) => {
       [req.user.id]
     );
     res.json({ ...umumiy, kategoriyalar });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Kam qolgan mahsulotlar ogohlantirishlari
+// Kam qolgan ogohlantirishlar
 router.get('/ogohlantirish', auth, async (req, res) => {
   try {
     const rows = await db.all_p(
@@ -105,38 +93,86 @@ router.get('/ogohlantirish', auth, async (req, res) => {
       [req.user.id]
     );
     res.json(rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ✅ YANGI: Barcode bo'yicha mahsulot qidirish
+router.get('/barcode/:barcode', auth, async (req, res) => {
+  try {
+    const mahsulot = await db.get_p(
+      `SELECT m.*, COALESCE(m.emoji, '📦') as emoji, k.nomi as kategoriya_nomi
+       FROM mahsulotlar m
+       LEFT JOIN kategoriyalar k ON k.id = m.kategoriya_id
+       WHERE m.user_id = $1 AND m.barcode = $2`,
+      [req.user.id, req.params.barcode]
+    );
+    if (mahsulot) {
+      res.json({ topildi: true, mahsulot });
+    } else {
+      res.json({ topildi: false, barcode: req.params.barcode });
+    }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ✅ YANGI: Barcode orqali miqdor qo'shish
+router.post('/barcode-qosh', auth, async (req, res) => {
+  try {
+    const { barcode, miqdor } = req.body;
+    const qoshMiqdor = Number(miqdor) || 1;
+    const mahsulot = await db.get_p(
+      'SELECT * FROM mahsulotlar WHERE user_id=$1 AND barcode=$2',
+      [req.user.id, barcode]
+    );
+    if (!mahsulot) return res.status(404).json({ error: 'Mahsulot topilmadi' });
+    const yangi = await db.run_p(
+      'UPDATE mahsulotlar SET miqdor = miqdor + $1 WHERE id=$2 AND user_id=$3 RETURNING *',
+      [qoshMiqdor, mahsulot.id, req.user.id]
+    );
+    res.json({
+      message: `+${qoshMiqdor} ${mahsulot.birlik} qo'shildi`,
+      mahsulot: yangi.rows[0]
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Mahsulot qo'shish
 router.post('/', auth, async (req, res) => {
-  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji } = req.body;
+  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji, barcode } = req.body;
   if (!nomi || narx === undefined) return res.status(400).json({ error: 'Nomi va narx kerak' });
   try {
+    // Barcode takrorlanmasligi
+    if (barcode) {
+      const existing = await db.get_p(
+        'SELECT id FROM mahsulotlar WHERE user_id=$1 AND barcode=$2',
+        [req.user.id, barcode]
+      );
+      if (existing) return res.status(400).json({ error: 'Bu barcode allaqachon mavjud' });
+    }
     const row = await db.run_p(
-      'INSERT INTO mahsulotlar (user_id, kategoriya_id, nomi, narx, miqdor, birlik, izoh, emoji) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-      [req.user.id, kategoriya_id || null, nomi, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦']
+      'INSERT INTO mahsulotlar (user_id, kategoriya_id, nomi, narx, miqdor, birlik, izoh, emoji, barcode) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+      [req.user.id, kategoriya_id || null, nomi, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', barcode || null]
     );
     res.json(row.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Mahsulot tahrirlash
 router.put('/:id', auth, async (req, res) => {
-  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji } = req.body;
+  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji, barcode } = req.body;
   try {
+    if (barcode) {
+      const existing = await db.get_p(
+        'SELECT id FROM mahsulotlar WHERE user_id=$1 AND barcode=$2 AND id != $3',
+        [req.user.id, barcode, req.params.id]
+      );
+      if (existing) return res.status(400).json({ error: 'Bu barcode boshqa mahsulotda bor' });
+    }
     const row = await db.run_p(
-      'UPDATE mahsulotlar SET nomi=$1, kategoriya_id=$2, narx=$3, miqdor=$4, birlik=$5, izoh=$6, emoji=$7 WHERE id=$8 AND user_id=$9 RETURNING *',
-      [nomi, kategoriya_id || null, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', req.params.id, req.user.id]
+      'UPDATE mahsulotlar SET nomi=$1, kategoriya_id=$2, narx=$3, miqdor=$4, birlik=$5, izoh=$6, emoji=$7, barcode=$8 WHERE id=$9 AND user_id=$10 RETURNING *',
+      [nomi, kategoriya_id || null, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', barcode || null, req.params.id, req.user.id]
     );
     res.json(row.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Mahsulot o'chirish
@@ -144,9 +180,7 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     await db.run_p('DELETE FROM mahsulotlar WHERE id=$1 AND user_id=$2', [req.params.id, req.user.id]);
     res.json({ message: "O'chirildi" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

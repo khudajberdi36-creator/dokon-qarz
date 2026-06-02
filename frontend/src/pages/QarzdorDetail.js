@@ -652,9 +652,14 @@ export default function QarzdorDetail() {
       <div className="table-card" style={{ marginBottom: 20 }}>
         <div className="table-header">
           <h3>💸 Faol qarzlar ({activeQarzlar.length})</h3>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowQarzModal(true)}>
-            ➕ Qarz qo'shish
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowQarzModal('qr')}>
+              📷 QR kod bilan
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowQarzModal('qolda')}>
+              ✍️ Qo'lda
+            </button>
+          </div>
         </div>
         {activeQarzlar.length === 0 ? (
           <div className="empty-state" style={{ padding: '40px 20px' }}>
@@ -784,9 +789,16 @@ export default function QarzdorDetail() {
         )}
       </div>
 
-      {showQarzModal && (
+      {(showQarzModal === 'qolda' || showQarzModal === true) && (
         <AddQarzModal qarzdorId={id} onClose={() => setShowQarzModal(false)}
           onSuccess={() => { setShowQarzModal(false); load(); }} />
+      )}
+      {showQarzModal === 'qr' && (
+        <QarzQrModal
+          qarzdorId={id}
+          onClose={() => setShowQarzModal(false)}
+          onSuccess={() => { setShowQarzModal(false); load(); }}
+        />
       )}
       {showTolovModal && (
         <AddTolovModal qarzId={showTolovModal.id} qarzSumma={showTolovModal.qolgan_summa}
@@ -801,6 +813,261 @@ export default function QarzdorDetail() {
           onSuccess={() => { setShowMuddatModal(null); load(); }}
         />
       )}
+    </div>
+  );
+}
+
+// ============ QR KOD BILAN QARZ QO'SHISH ============
+function QarzQrModal({ qarzdorId, onClose, onSuccess }) {
+  const [scanning, setScanning] = React.useState(true);
+  const [natija, setNatija] = React.useState(null);
+  const [form, setForm] = React.useState({
+    miqdor: 1,
+    sana: new Date().toISOString().split('T')[0],
+    muddat: '',
+    sabab: ''
+  });
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const videoRef = React.useRef(null);
+  const streamRef = React.useRef(null);
+  const readerRef = React.useRef(null);
+  const [status, setStatus] = React.useState('Kamera ochilmoqda...');
+  const [manualInput, setManualInput] = React.useState('');
+
+  // handleBarcode useCallback bilan — useEffect dan oldin e'lon qilinadi
+  const handleBarcode = React.useCallback(async (barcode) => {
+    try {
+      const r = await axios.get(`/api/mahsulotlar/barcode/${encodeURIComponent(barcode)}`);
+      if (r.data.topildi) {
+        setNatija(r.data.mahsulot);
+        setForm(f => ({ ...f, sabab: r.data.mahsulot.nomi }));
+      } else {
+        setError("Bu shtrix-kodli mahsulot topilmadi. Avval Mahsulotlar bo'limiga qo'shing.");
+      }
+    } catch {
+      setError('Xatolik yuz berdi');
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!scanning) return;
+    let stopped = false;
+
+    async function start() {
+      try {
+        if (!window.ZXing) {
+          setStatus('Skaner yuklanmoqda...');
+          await new Promise((res, rej) => {
+            const s = document.createElement('script');
+            s.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+            s.onload = res;
+            s.onerror = rej;
+            document.head.appendChild(s);
+          });
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }
+        });
+        if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        const hints = new Map();
+        hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+        const reader = new window.ZXing.BrowserMultiFormatReader(hints);
+        readerRef.current = reader;
+        setStatus('📷 Mahsulotning shtrix-kodini skanerlang...');
+
+        reader.decodeFromVideoElement(videoRef.current, async (result) => {
+          if (stopped || !result) return;
+          const barcode = result.getText();
+          stopped = true;
+          if (readerRef.current) try { readerRef.current.reset(); } catch {}
+          if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+          setScanning(false);
+          setStatus('✅ ' + barcode);
+          await handleBarcode(barcode);
+        });
+      } catch {
+        setStatus("❌ Kamera ishlamadi. Qo'lda kiriting:");
+      }
+    }
+
+    start();
+    return () => {
+      stopped = true;
+      if (readerRef.current) try { readerRef.current.reset(); } catch {}
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    };
+  }, [scanning, handleBarcode]);
+
+  const handleSubmit = async () => {
+    if (!natija) return;
+    setLoading(true);
+    setError('');
+    try {
+      const summa = Number(natija.narx) * Number(form.miqdor);
+      await axios.post('/api/qarzlar', {
+        qarzdor_id: qarzdorId,
+        summa,
+        valyuta: 'UZS',
+        sana: form.sana,
+        muddat: form.muddat || null,
+        sabab: form.sabab || natija.nomi,
+        mahsulot_id: natija.id,
+        mahsulot_miqdor: Number(form.miqdor)
+      });
+      onSuccess();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Xatolik');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>📷 QR kod bilan qarz qo'shish</h3>
+          <button className="btn btn-secondary btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="error-msg" style={{ marginBottom: 12 }}>⚠️ {error}</div>}
+
+          {/* Skanerlash */}
+          {scanning && !natija && (
+            <>
+              <div style={{
+                borderRadius: 12, overflow: 'hidden', background: '#000',
+                aspectRatio: '4/3', position: 'relative', marginBottom: 12
+              }}>
+                <video ref={videoRef}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  muted playsInline />
+                <div style={{
+                  position: 'absolute', top: '50%', left: '10%', right: '10%',
+                  height: 2, background: '#ef4444', boxShadow: '0 0 8px #ef4444',
+                  transform: 'translateY(-50%)',
+                  animation: 'scanLine 2s ease-in-out infinite'
+                }} />
+                <style>{`@keyframes scanLine { 0%,100%{top:30%} 50%{top:70%} }`}</style>
+              </div>
+              <div style={{
+                textAlign: 'center', fontSize: 13, color: 'var(--text2)',
+                background: 'var(--bg3)', borderRadius: 8,
+                padding: '8px 12px', marginBottom: 12
+              }}>
+                {status}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="form-input"
+                  placeholder="Yoki qo'lda kiriting..."
+                  value={manualInput}
+                  onChange={e => setManualInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && manualInput.trim()) {
+                      setScanning(false);
+                      handleBarcode(manualInput.trim());
+                    }
+                  }}
+                  inputMode="numeric"
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={!manualInput.trim()}
+                  onClick={() => { setScanning(false); handleBarcode(manualInput.trim()); }}
+                >✓</button>
+              </div>
+            </>
+          )}
+
+          {/* Mahsulot topildi */}
+          {natija && (
+            <>
+              <div style={{
+                background: 'var(--bg3)', borderRadius: 12, padding: 16,
+                marginBottom: 14, textAlign: 'center'
+              }}>
+                <div style={{ fontSize: 36 }}>{natija.emoji || '📦'}</div>
+                <div style={{ fontWeight: 800, fontSize: 17, marginTop: 6 }}>{natija.nomi}</div>
+                <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>
+                  {Number(natija.narx).toLocaleString('uz-UZ')} so'm / {natija.birlik}
+                </div>
+                {Number(natija.miqdor) < 5 && (
+                  <div style={{ color: '#f59e0b', fontSize: 12, marginTop: 4 }}>
+                    ⚠️ Omborda: {natija.miqdor} {natija.birlik}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Mahsulot soni</label>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px' }}
+                      onClick={() => setForm(f => ({ ...f, miqdor: Math.max(1, Number(f.miqdor) - 1) }))}>−</button>
+                    <input
+                      className="form-input" type="number" min="1"
+                      value={form.miqdor}
+                      onChange={e => setForm(f => ({ ...f, miqdor: e.target.value }))}
+                      style={{ textAlign: 'center', fontWeight: 800 }}
+                    />
+                    <button className="btn btn-secondary btn-sm" style={{ padding: '6px 12px' }}
+                      onClick={() => setForm(f => ({ ...f, miqdor: Number(f.miqdor) + 1 }))}>+</button>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Jami summa</label>
+                  <div style={{ fontWeight: 800, fontSize: 20, color: '#ef4444', paddingTop: 10 }}>
+                    {(Number(natija.narx) * Number(form.miqdor)).toLocaleString('uz-UZ')} so'm
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Sana *</label>
+                  <input type="date" className="form-input" value={form.sana}
+                    onChange={e => setForm(f => ({ ...f, sana: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Qaytarish muddati</label>
+                  <input type="date" className="form-input" value={form.muddat}
+                    onChange={e => setForm(f => ({ ...f, muddat: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Izoh</label>
+                <input className="form-input" value={form.sabab}
+                  onChange={e => setForm(f => ({ ...f, sabab: e.target.value }))}
+                  placeholder={natija.nomi} />
+              </div>
+
+              <button className="btn btn-secondary btn-sm" style={{ marginTop: 4 }}
+                onClick={() => { setNatija(null); setScanning(true); setError(''); }}>
+                ↩️ Qayta skanerlash
+              </button>
+            </>
+          )}
+        </div>
+
+        {natija && (
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose}>Bekor</button>
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
+              {loading ? <span className="spinner" /> : "💸 Qarz qo'shish"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

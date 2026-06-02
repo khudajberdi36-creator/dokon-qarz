@@ -1,126 +1,320 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-// =====================
-// FORMATTERS
-// =====================
-function formatSum(n) {
-  return Number(n || 0).toLocaleString('uz-UZ');
-}
+function formatSum(n) { return Number(n || 0).toLocaleString('uz-UZ'); }
+function unformat(val) { return String(val).replace(/\s/g, '').replace(/,/g, '.'); }
 
-// 12000 → "12 000" kiritish uchun
-function formatInput(val) {
-  const raw = String(val).replace(/\s/g, '');
-  if (!raw || isNaN(raw)) return val;
-  return Number(raw).toLocaleString('uz-UZ');
-}
-
-function unformat(val) {
-  return String(val).replace(/\s/g, '').replace(/,/g, '.');
-}
-
-// =====================
-// BIRLIKLAR — to'liq ro'yxat
-// =====================
 const BIRLIK_GROUPS = [
-  {
-    group: '📦 Dona / Hisob',
-    items: [
-      { value: 'dona',   label: 'Dona' },
-      { value: 'quti',   label: 'Quti' },
-      { value: 'paket',  label: 'Paket' },
-      { value: 'juft',   label: 'Juft (poyabzal, qo\'lqop...)' },
-      { value: 'to\'plam', label: 'To\'plam' },
-      { value: 'varaq',  label: 'Varaq' },
-      { value: 'tayoq',  label: 'Tayoq / Stick' },
-    ]
-  },
-  {
-    group: '⚖️ Og\'irlik',
-    items: [
-      { value: 'g',      label: 'Gramm (g)' },
-      { value: '50g',    label: '50 gramm' },
-      { value: '100g',   label: '100 gramm' },
-      { value: '200g',   label: '200 gramm' },
-      { value: '250g',   label: '250 gramm' },
-      { value: '500g',   label: '500 gramm (yarim kg)' },
-      { value: 'kg',     label: 'Kilogramm (kg)' },
-      { value: '2kg',    label: '2 kg' },
-      { value: '5kg',    label: '5 kg' },
-      { value: '10kg',   label: '10 kg' },
-      { value: '25kg',   label: '25 kg (qop)' },
-      { value: '50kg',   label: '50 kg (qop)' },
-    ]
-  },
-  {
-    group: '🧴 Hajm (suyuqlik)',
-    items: [
-      { value: 'ml',     label: 'Millilitr (ml)' },
-      { value: '100ml',  label: '100 ml' },
-      { value: '200ml',  label: '200 ml' },
-      { value: '250ml',  label: '250 ml' },
-      { value: '330ml',  label: '330 ml (bank)' },
-      { value: '0.5l',   label: '0.5 litr (yarim litr)' },
-      { value: '0.75l',  label: '0.75 litr' },
-      { value: '1l',     label: '1 litr' },
-      { value: '1.5l',   label: '1.5 litr' },
-      { value: '2l',     label: '2 litr' },
-      { value: '3l',     label: '3 litr' },
-      { value: '5l',     label: '5 litr' },
-      { value: '10l',    label: '10 litr' },
-      { value: '19l',    label: '19 litr (biddon)' },
-      { value: 'litr',   label: 'Litr (ixtiyoriy)' },
-    ]
-  },
-  {
-    group: '📏 Uzunlik / Maydon',
-    items: [
-      { value: 'sm',     label: 'Santimetr (sm)' },
-      { value: 'metr',   label: 'Metr' },
-      { value: 'm2',     label: 'Kvadrat metr (m²)' },
-      { value: 'rol',    label: 'Rulon' },
-    ]
-  },
-  {
-    group: '⏱️ Vaqt / Xizmat',
-    items: [
-      { value: 'soat',   label: 'Soat' },
-      { value: 'kun',    label: 'Kun' },
-      { value: 'oy',     label: 'Oy' },
-      { value: 'xizmat', label: 'Xizmat (1 marta)' },
-    ]
-  },
+  { group: '📦 Dona / Hisob', items: [
+    { value: 'dona', label: 'Dona' }, { value: 'quti', label: 'Quti' },
+    { value: 'paket', label: 'Paket' }, { value: 'juft', label: 'Juft' },
+    { value: "to'plam", label: "To'plam" }, { value: 'varaq', label: 'Varaq' },
+    { value: 'tayoq', label: 'Tayoq / Stick' },
+  ]},
+  { group: '⚖️ Og\'irlik', items: [
+    { value: 'g', label: 'Gramm (g)' }, { value: '50g', label: '50 gramm' },
+    { value: '100g', label: '100 gramm' }, { value: '250g', label: '250 gramm' },
+    { value: '500g', label: '500 gramm' }, { value: 'kg', label: 'Kilogramm (kg)' },
+    { value: '2kg', label: '2 kg' }, { value: '5kg', label: '5 kg' },
+    { value: '10kg', label: '10 kg' }, { value: '25kg', label: '25 kg (qop)' },
+    { value: '50kg', label: '50 kg (qop)' },
+  ]},
+  { group: '🧴 Hajm (suyuqlik)', items: [
+    { value: 'ml', label: 'Millilitr (ml)' }, { value: '100ml', label: '100 ml' },
+    { value: '200ml', label: '200 ml' }, { value: '250ml', label: '250 ml' },
+    { value: '330ml', label: '330 ml (bank)' }, { value: '0.5l', label: '0.5 litr' },
+    { value: '0.75l', label: '0.75 litr' }, { value: '1l', label: '1 litr' },
+    { value: '1.5l', label: '1.5 litr' }, { value: '2l', label: '2 litr' },
+    { value: '3l', label: '3 litr' }, { value: '5l', label: '5 litr' },
+    { value: '10l', label: '10 litr' }, { value: '19l', label: '19 litr (biddon)' },
+    { value: 'litr', label: 'Litr (ixtiyoriy)' },
+  ]},
+  { group: '📏 Uzunlik / Maydon', items: [
+    { value: 'sm', label: 'Santimetr' }, { value: 'metr', label: 'Metr' },
+    { value: 'm2', label: 'Kvadrat metr (m²)' }, { value: 'rol', label: 'Rulon' },
+  ]},
+  { group: '⏱️ Vaqt / Xizmat', items: [
+    { value: 'soat', label: 'Soat' }, { value: 'kun', label: 'Kun' },
+    { value: 'oy', label: 'Oy' }, { value: 'xizmat', label: 'Xizmat' },
+  ]},
 ];
-
-// Barcha birliklar flat ro'yxat
 const ALL_BIRLIKLAR = BIRLIK_GROUPS.flatMap(g => g.items);
-
-// Birlik labelini topish
 function getBirlikLabel(value) {
-  const found = ALL_BIRLIKLAR.find(b => b.value === value);
-  return found ? found.label : value;
+  const f = ALL_BIRLIKLAR.find(b => b.value === value);
+  return f ? f.label : (value || 'dona');
 }
 
-// Miqdor + birlik chiroyli ko'rsatish
-function showMiqdor(miqdor, birlik) {
-  const m = Number(miqdor || 0);
-  const label = getBirlikLabel(birlik);
-  return `${m % 1 === 0 ? m : m} ${label}`;
+const EMOJIS = ['📦','🥤','🍬','🍫','🥛','🍞','🧴','🧹','❄️','🔧','👕','📱','🍎','🥩','🧆','☕','🍵','🧃','🍺','🥫','🧂','🫙','🛒','🏠'];
+
+// ===================== QR SKANER =====================
+function QrSkanerModal({ onResult, onClose }) {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const readerRef = useRef(null);
+  const [status, setStatus] = useState('Kamera ochilmoqda...');
+  const [manualInput, setManualInput] = useState('');
+  const [useManual, setUseManual] = useState(false);
+
+  useEffect(() => {
+    let stopped = false;
+
+    async function startScanner() {
+      try {
+        // ZXing kutubxonasini dinamik yuklash
+        if (!window.ZXing) {
+          setStatus('Skaner kutubxonasi yuklanmoqda...');
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('Kutubxona yuklanmadi'));
+            document.head.appendChild(script);
+          });
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        const hints = new Map();
+        const formats = [
+          window.ZXing.BarcodeFormat.EAN_13,
+          window.ZXing.BarcodeFormat.EAN_8,
+          window.ZXing.BarcodeFormat.CODE_128,
+          window.ZXing.BarcodeFormat.CODE_39,
+          window.ZXing.BarcodeFormat.QR_CODE,
+          window.ZXing.BarcodeFormat.UPC_A,
+          window.ZXing.BarcodeFormat.UPC_E,
+          window.ZXing.BarcodeFormat.ITF,
+          window.ZXing.BarcodeFormat.DATA_MATRIX,
+        ];
+        hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+        hints.set(window.ZXing.DecodeHintType.TRY_HARDER, true);
+
+        const reader = new window.ZXing.BrowserMultiFormatReader(hints);
+        readerRef.current = reader;
+        setStatus('📷 Shtrix-kodni kameraga tutib turing...');
+
+        reader.decodeFromVideoElement(videoRef.current, (result, err) => {
+          if (stopped) return;
+          if (result) {
+            const text = result.getText();
+            setStatus(`✅ Topildi: ${text}`);
+            stopped = true;
+            stopAll();
+            onResult(text);
+          }
+        });
+      } catch (err) {
+        if (!stopped) {
+          console.error('Kamera xatosi:', err);
+          setStatus('❌ Kamera ishlamadi. Qo\'lda kiriting:');
+          setUseManual(true);
+        }
+      }
+    }
+
+    function stopAll() {
+      if (readerRef.current) {
+        try { readerRef.current.reset(); } catch {}
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+    }
+
+    startScanner();
+    return () => {
+      stopped = true;
+      stopAll();
+    };
+  }, [onResult]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>📷 Shtrix-kod / QR skanerlash</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {/* Video preview */}
+          <div style={{
+            position: 'relative', borderRadius: 12, overflow: 'hidden',
+            background: '#000', aspectRatio: '4/3', marginBottom: 14
+          }}>
+            <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted playsInline />
+            {/* Qizil nishon chizig'i */}
+            <div style={{
+              position: 'absolute', top: '50%', left: '10%', right: '10%',
+              height: 2, background: '#ef4444',
+              boxShadow: '0 0 8px #ef4444',
+              transform: 'translateY(-50%)',
+              animation: 'scan 2s ease-in-out infinite'
+            }} />
+            <style>{`
+              @keyframes scan {
+                0%, 100% { top: 30%; }
+                50% { top: 70%; }
+              }
+            `}</style>
+          </div>
+
+          <div style={{
+            textAlign: 'center', fontSize: 13, color: 'var(--text2)',
+            marginBottom: 14, padding: '8px 12px',
+            background: 'var(--bg3)', borderRadius: 8
+          }}>
+            {status}
+          </div>
+
+          {/* Qo'lda kiritish */}
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6, textAlign: 'center' }}>
+              Yoki shtrix-kodni qo'lda kiriting:
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="form-input"
+                placeholder="1234567890123"
+                value={manualInput}
+                onChange={e => setManualInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && manualInput.trim()) {
+                    onResult(manualInput.trim());
+                    onClose();
+                  }
+                }}
+                autoFocus={useManual}
+                inputMode="numeric"
+              />
+              <button
+                className="btn btn-primary"
+                disabled={!manualInput.trim()}
+                onClick={() => { onResult(manualInput.trim()); onClose(); }}
+              >
+                ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// =====================
-// KATEGORIYA EMOJILAR
-// =====================
-const EMOJIS = [
-  '📦','🥤','🍬','🍫','🥛','🍞','🧴','🧹',
-  '❄️','🔧','👕','📱','🍎','🥩','🧆','☕',
-  '🍵','🧃','🍺','🥫','🧂','🫙','🛒','🏠',
-];
+// ===================== SKAN NATIJASI MODAL =====================
+function SkanNatijaModal({ barcode, natija, kategoriyalar, onQosh, onYangiMahsulot, onClose }) {
+  const [qoshMiqdor, setQoshMiqdor] = useState(1);
 
-// =====================
-// KOMPONENT
-// =====================
+  if (natija?.topildi) {
+    const m = natija.mahsulot;
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>✅ Mahsulot topildi</h3>
+            <button className="modal-close" onClick={onClose}>✕</button>
+          </div>
+          <div className="modal-body">
+            {/* Mahsulot info */}
+            <div style={{
+              background: 'var(--bg3)', borderRadius: 12, padding: '16px',
+              marginBottom: 16, textAlign: 'center'
+            }}>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>{m.emoji || '📦'}</div>
+              <div style={{ fontWeight: 800, fontSize: 18 }}>{m.nomi}</div>
+              <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 4 }}>
+                {formatSum(m.narx)} so'm / {getBirlikLabel(m.birlik)}
+              </div>
+              <div style={{
+                marginTop: 8, fontWeight: 700, fontSize: 16,
+                color: Number(m.miqdor) < 5 ? '#f59e0b' : '#10b981'
+              }}>
+                Mavjud: {m.miqdor} {getBirlikLabel(m.birlik)}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Nechta qo'shish?</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: 40, height: 40, padding: 0, fontSize: 20 }}
+                  onClick={() => setQoshMiqdor(q => Math.max(1, q - 1))}
+                >−</button>
+                <input
+                  type="number" min="1" step="1"
+                  value={qoshMiqdor}
+                  onChange={e => setQoshMiqdor(Number(e.target.value) || 1)}
+                  className="form-input"
+                  style={{ textAlign: 'center', fontWeight: 800, fontSize: 20, flex: 1 }}
+                />
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: 40, height: 40, padding: 0, fontSize: 20 }}
+                  onClick={() => setQoshMiqdor(q => q + 1)}
+                >+</button>
+              </div>
+              <div style={{ textAlign: 'center', marginTop: 8, fontSize: 13, color: 'var(--text2)' }}>
+                Keyin: {Number(m.miqdor) + qoshMiqdor} {getBirlikLabel(m.birlik)} bo'ladi
+              </div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose}>Bekor</button>
+            <button className="btn btn-success" onClick={() => onQosh(barcode, qoshMiqdor)}>
+              ➕ {qoshMiqdor} ta qo'shish
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Topilmadi — yangi mahsulot qo'shish
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>🆕 Yangi mahsulot</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{
+            background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)',
+            borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>📷 Skan qilingan kod:</div>
+            <code style={{ fontSize: 16, letterSpacing: 2 }}>{barcode}</code>
+          </div>
+          <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+            Bu shtrix-kod bazada topilmadi. Yangi mahsulot sifatida qo'shilsinmi?
+          </p>
+          <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--text3)' }}>
+            💡 <strong>Maslahat:</strong> Coca-Cola 0.5L va 1.5L ni alohida mahsulot qilib qo'shing —
+            har birining o'z shtrix-kodi bor.
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Bekor</button>
+          <button className="btn btn-primary" onClick={() => onYangiMahsulot(barcode)}>
+            ➕ Yangi mahsulot qo'shish
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================== ASOSIY KOMPONENT =====================
 export default function Mahsulotlar() {
   const [mahsulotlar, setMahsulotlar] = useState([]);
   const [kategoriyalar, setKategoriyalar] = useState([]);
@@ -128,13 +322,14 @@ export default function Mahsulotlar() {
   const [selectedKat, setSelectedKat] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(null);
+  const [modal, setModal] = useState(null); // 'mahsulot' | 'kategoriya' | 'skaner' | 'skan_natija'
   const [editItem, setEditItem] = useState(null);
+  const [skanBarcode, setSkanBarcode] = useState('');
+  const [skanNatija, setSkanNatija] = useState(null);
 
-  const emptyForm = { nomi: '', kategoriya_id: '', narx: '', miqdor: '', birlik: 'dona', izoh: '' };
+  const emptyForm = { nomi: '', kategoriya_id: '', narx: '', soni: '', birlik: 'dona', izoh: '', barcode: '', emoji: '📦' };
   const [form, setForm] = useState(emptyForm);
-  const [narxDisplay, setNarxDisplay] = useState(''); // formatlangan ko'rsatish uchun
-
+  const [narxDisplay, setNarxDisplay] = useState('');
   const [katForm, setKatForm] = useState({ nomi: '', rang: '#6366f1', emoji: '📦' });
   const [customBirlik, setCustomBirlik] = useState(false);
 
@@ -148,18 +343,15 @@ export default function Mahsulotlar() {
       setMahsulotlar(m.data);
       setKategoriyalar(k.data);
       setStats(s.data);
-    } catch {
-      toast.error('Xatolik yuz berdi');
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast.error('Xatolik'); }
+    finally { setLoading(false); }
   }, [selectedKat, search]);
 
   useEffect(() => { load(); }, [load]);
 
-  const openAdd = () => {
+  const openAdd = (prefillBarcode = '') => {
     setEditItem(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, barcode: prefillBarcode });
     setNarxDisplay('');
     setCustomBirlik(false);
     setModal('mahsulot');
@@ -167,26 +359,33 @@ export default function Mahsulotlar() {
 
   const openEdit = (m) => {
     setEditItem(m);
-    setForm({ nomi: m.nomi, kategoriya_id: m.kategoriya_id || '', narx: m.narx, miqdor: m.miqdor, birlik: m.birlik, izoh: m.izoh || '' });
+    setForm({
+      nomi: m.nomi, kategoriya_id: m.kategoriya_id || '',
+      narx: m.narx, soni: m.miqdor,
+      birlik: m.birlik, izoh: m.izoh || '',
+      barcode: m.barcode || '', emoji: m.emoji || '📦'
+    });
     setNarxDisplay(formatSum(m.narx));
-    const known = ALL_BIRLIKLAR.find(b => b.value === m.birlik);
-    setCustomBirlik(!known);
+    setCustomBirlik(!ALL_BIRLIKLAR.find(b => b.value === m.birlik));
     setModal('mahsulot');
   };
 
-  // Narx input — kiritayotganda vergul qo'yish
   const handleNarxChange = (e) => {
     const raw = e.target.value.replace(/\s/g, '').replace(/[^0-9]/g, '');
     setForm(f => ({ ...f, narx: raw }));
-    if (raw) setNarxDisplay(Number(raw).toLocaleString('uz-UZ'));
-    else setNarxDisplay('');
+    setNarxDisplay(raw ? Number(raw).toLocaleString('uz-UZ') : '');
   };
 
   const saveMahsulot = async () => {
     if (!form.nomi.trim()) return toast.error('Mahsulot nomi kiritilmadi');
     if (!form.narx) return toast.error('Narx kiritilmadi');
     try {
-      const payload = { ...form, narx: Number(unformat(form.narx)), miqdor: Number(unformat(form.miqdor)) || 0 };
+      const payload = {
+        ...form,
+        narx: Number(unformat(form.narx)),
+        miqdor: Number(unformat(form.soni)) || 0,
+        barcode: form.barcode.trim() || null,
+      };
       if (editItem) {
         await axios.put(`/api/mahsulotlar/${editItem.id}`, payload);
         toast.success('✅ Yangilandi');
@@ -196,9 +395,39 @@ export default function Mahsulotlar() {
       }
       setModal(null);
       load();
+    } catch (err) { toast.error(err.response?.data?.error || 'Xatolik'); }
+  };
+
+  // ✅ QR skan bo'lganda
+  const handleSkanResult = async (barcode) => {
+    setModal(null);
+    setSkanBarcode(barcode);
+    setSkanNatija(null);
+    try {
+      const r = await axios.get(`/api/mahsulotlar/barcode/${encodeURIComponent(barcode)}`);
+      setSkanNatija(r.data);
+      setModal('skan_natija');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Xatolik');
+      toast.error('Xatolik yuz berdi');
     }
+  };
+
+  // ✅ Topilgan mahsulotga soni qo'shish
+  const handleSoniQosh = async (barcode, miqdor) => {
+    try {
+      const r = await axios.post('/api/mahsulotlar/barcode-qosh', { barcode, miqdor });
+      toast.success(`✅ ${r.data.message}`);
+      setModal(null);
+      setSkanNatija(null);
+      load();
+    } catch (err) { toast.error(err.response?.data?.error || 'Xatolik'); }
+  };
+
+  // ✅ Topilmasa - yangi mahsulot formasini barcode bilan ochish
+  const handleYangiMahsulot = (barcode) => {
+    setModal(null);
+    setSkanNatija(null);
+    openAdd(barcode);
   };
 
   const deleteMahsulot = async (id) => {
@@ -216,16 +445,7 @@ export default function Mahsulotlar() {
       setModal(null);
       setKatForm({ nomi: '', rang: '#6366f1', emoji: '📦' });
       load();
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Xatolik');
-    }
-  };
-
-  const deleteKategoriya = async (id) => {
-    if (!window.confirm("O'chirishga ishonchingiz komilmi?")) return;
-    await axios.delete(`/api/mahsulotlar/kategoriyalar/${id}`);
-    toast.success("🗑️ O'chirildi");
-    load();
+    } catch (err) { toast.error(err.response?.data?.error || 'Xatolik'); }
   };
 
   if (loading) return <div className="loading-page"><div className="spinner" /></div>;
@@ -240,7 +460,15 @@ export default function Mahsulotlar() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => setModal('kategoriya')}>🗂️ Kategoriya</button>
-          <button className="btn btn-primary" onClick={openAdd}>＋ Mahsulot</button>
+          {/* ✅ QR SKAN tugmasi */}
+          <button
+            className="btn btn-secondary"
+            onClick={() => setModal('skaner')}
+            style={{ background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.4)', color: '#a5b4fc' }}
+          >
+            📷 QR / Shtrix-kod
+          </button>
+          <button className="btn btn-primary" onClick={() => openAdd()}>＋ Mahsulot</button>
         </div>
       </div>
 
@@ -259,7 +487,7 @@ export default function Mahsulotlar() {
           </div>
           <div className="stat-card orange">
             <div className="stat-icon">📊</div>
-            <div className="stat-label">Jami miqdor</div>
+            <div className="stat-label">Jami mahsulot soni</div>
             <div className="stat-value">{formatSum(stats.jami_miqdor)}</div>
           </div>
         </div>
@@ -271,8 +499,7 @@ export default function Mahsulotlar() {
           Hammasi
         </button>
         {kategoriyalar.map(k => (
-          <button
-            key={k.id}
+          <button key={k.id}
             className={`btn btn-sm ${selectedKat == k.id ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setSelectedKat(k.id)}
             style={{ display: 'flex', alignItems: 'center', gap: 4 }}
@@ -284,9 +511,12 @@ export default function Mahsulotlar() {
       </div>
 
       {/* Qidiruv */}
-      <div style={{ marginBottom: 16 }}>
-        <input className="form-input" placeholder="🔍 Mahsulot qidirish..." value={search}
-          onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300 }} />
+      <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input className="form-input" placeholder="🔍 Mahsulot qidirish..."
+          value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300 }} />
+        {search && (
+          <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>✕</button>
+        )}
       </div>
 
       {/* Jadval */}
@@ -295,7 +525,10 @@ export default function Mahsulotlar() {
           <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text2)' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🛒</div>
             <p>Mahsulot topilmadi</p>
-            <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={openAdd}>＋ Birinchi mahsulotni qo'shing</button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 14 }}>
+              <button className="btn btn-secondary" onClick={() => setModal('skaner')}>📷 QR skanerlash</button>
+              <button className="btn btn-primary" onClick={() => openAdd()}>＋ Qo'lda qo'shish</button>
+            </div>
           </div>
         ) : (
           <table>
@@ -304,8 +537,9 @@ export default function Mahsulotlar() {
                 <th>Mahsulot</th>
                 <th>Kategoriya</th>
                 <th>Narx</th>
-                <th>Miqdor</th>
-                <th>Umumiy qiymat</th>
+                <th>Mahsulot soni</th>
+                <th>Umuliy qiymat</th>
+                <th>Shtrix-kod</th>
                 <th></th>
               </tr>
             </thead>
@@ -313,8 +547,13 @@ export default function Mahsulotlar() {
               {mahsulotlar.map(m => (
                 <tr key={m.id}>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{m.nomi}</div>
-                    {m.izoh && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>{m.izoh}</div>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 22 }}>{m.emoji || '📦'}</span>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{m.nomi}</div>
+                        {m.izoh && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>{m.izoh}</div>}
+                      </div>
+                    </div>
                   </td>
                   <td>
                     {m.kategoriya_nomi
@@ -323,25 +562,27 @@ export default function Mahsulotlar() {
                   </td>
                   <td>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{formatSum(m.narx)} so'm</div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>
-                      1 {getBirlikLabel(m.birlik)} uchun
-                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2 }}>1 {getBirlikLabel(m.birlik)} uchun</div>
                   </td>
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                       <span style={{
-                        fontWeight: 700, fontSize: 15,
+                        fontWeight: 800, fontSize: 18,
                         color: Number(m.miqdor) === 0 ? '#ef4444' : Number(m.miqdor) < 5 ? '#f59e0b' : '#10b981'
                       }}>
-                        {Number(m.miqdor) === 0 && '⚠️ '}
-                        {Number(m.miqdor) % 1 === 0 ? Number(m.miqdor) : Number(m.miqdor)}
+                        {Number(m.miqdor) === 0 && '⚠️ '}{Number(m.miqdor)}
                       </span>
-                      <span style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 500 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>
                         {getBirlikLabel(m.birlik)}
                       </span>
                     </div>
                   </td>
                   <td style={{ fontWeight: 700, color: '#10b981' }}>{formatSum(m.umumiy_qiymat)} so'm</td>
+                  <td>
+                    {m.barcode
+                      ? <code style={{ fontSize: 11, background: 'var(--bg3)', padding: '3px 7px', borderRadius: 6 }}>{m.barcode}</code>
+                      : <span style={{ color: 'var(--text3)', fontSize: 12 }}>—</span>}
+                  </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-secondary btn-sm" onClick={() => openEdit(m)}>✏️</button>
@@ -359,161 +600,182 @@ export default function Mahsulotlar() {
       {kategoriyalar.length > 0 && (
         <div className="table-card" style={{ marginTop: 20 }}>
           <div className="table-header"><h3>🗂️ Kategoriyalar</h3></div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, padding: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, padding: 16 }}>
             {kategoriyalar.map(k => (
-              <div key={k.id} style={{ background: 'var(--bg)', borderRadius: 12, padding: 16, border: `2px solid ${k.rang}33`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={k.id} style={{ background: 'var(--bg)', borderRadius: 12, padding: 14, border: `2px solid ${k.rang}33`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontSize: 24 }}>{k.emoji}</div>
+                  <div style={{ fontSize: 22 }}>{k.emoji}</div>
                   <div style={{ fontWeight: 700, marginTop: 4 }}>{k.nomi}</div>
                   <div style={{ fontSize: 12, color: 'var(--text2)' }}>{k.mahsulot_soni} mahsulot</div>
-                  <div style={{ fontSize: 13, color: '#10b981', fontWeight: 600 }}>{formatSum(k.umumiy_qiymat)} so'm</div>
+                  <div style={{ fontSize: 12, color: '#10b981', fontWeight: 600 }}>{formatSum(k.umumiy_qiymat)} so'm</div>
                 </div>
-                <button className="btn btn-danger btn-sm" onClick={() => deleteKategoriya(k.id)}>🗑️</button>
+                <button className="btn btn-danger btn-sm" onClick={() => {
+                  if (window.confirm("O'chirilsinmi?")) {
+                    axios.delete(`/api/mahsulotlar/kategoriyalar/${k.id}`).then(load);
+                  }
+                }}>🗑️</button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ===================== MAHSULOT MODALI ===================== */}
+      {/* ============ QR SKANER MODAL ============ */}
+      {modal === 'skaner' && (
+        <QrSkanerModal
+          onResult={handleSkanResult}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      {/* ============ SKAN NATIJASI MODAL ============ */}
+      {modal === 'skan_natija' && (
+        <SkanNatijaModal
+          barcode={skanBarcode}
+          natija={skanNatija}
+          kategoriyalar={kategoriyalar}
+          onQosh={handleSoniQosh}
+          onYangiMahsulot={handleYangiMahsulot}
+          onClose={() => { setModal(null); setSkanNatija(null); }}
+        />
+      )}
+
+      {/* ============ MAHSULOT MODAL ============ */}
       {modal === 'mahsulot' && (
         <div className="modal-overlay" onClick={() => setModal(null)}>
-          <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{editItem ? '✏️ Mahsulot tahrirlash' : '➕ Mahsulot qo\'shish'}</h3>
+              <h3>{editItem ? '✏️ Tahrirlash' : '➕ Yangi mahsulot'}</h3>
               <button className="modal-close" onClick={() => setModal(null)}>✕</button>
             </div>
             <div className="modal-body">
+
+              {/* Emoji tanlash */}
+              <div className="form-group">
+                <label className="form-label">Emoji</label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {EMOJIS.map(em => (
+                    <button key={em} onClick={() => setForm(f => ({ ...f, emoji: em }))}
+                      style={{
+                        fontSize: 20, padding: '4px 7px', borderRadius: 8, cursor: 'pointer',
+                        background: form.emoji === em ? 'var(--accent)' : 'var(--bg)',
+                        border: `2px solid ${form.emoji === em ? 'var(--accent)' : 'var(--border)'}`,
+                        transform: form.emoji === em ? 'scale(1.2)' : 'scale(1)', transition: 'all 0.15s'
+                      }}>
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Nomi */}
               <div className="form-group">
                 <label className="form-label">Mahsulot nomi *</label>
                 <input className="form-input" value={form.nomi}
-                  onChange={e => setForm({ ...form, nomi: e.target.value })}
-                  placeholder="Masalan: Coca-Cola 1.5L, Shakar, Non..." />
+                  onChange={e => setForm(f => ({ ...f, nomi: e.target.value }))}
+                  placeholder="Masalan: Coca-Cola 1.5L, Non, Shakar 1kg..." />
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                  💡 Bir xil mahsulotning har xil hajmini alohida yozing: "Coca-Cola 0.5L", "Coca-Cola 1.5L"
+                </div>
               </div>
 
               {/* Kategoriya */}
               <div className="form-group">
                 <label className="form-label">Kategoriya</label>
                 <select className="form-input" value={form.kategoriya_id}
-                  onChange={e => setForm({ ...form, kategoriya_id: e.target.value })}>
+                  onChange={e => setForm(f => ({ ...f, kategoriya_id: e.target.value }))}>
                   <option value="">— Kategoriyasiz —</option>
                   {kategoriyalar.map(k => <option key={k.id} value={k.id}>{k.emoji} {k.nomi}</option>)}
                 </select>
               </div>
 
-              {/* Narx — formatlangan */}
+              {/* Narx */}
               <div className="form-group">
                 <label className="form-label">Narx (so'm) *</label>
                 <div style={{ position: 'relative' }}>
-                  <input
-                    className="form-input"
-                    value={narxDisplay}
-                    onChange={handleNarxChange}
-                    placeholder="12 000"
-                    inputMode="numeric"
-                    style={{ paddingRight: 60 }}
-                  />
-                  <span style={{
-                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-                    fontSize: 12, color: 'var(--text3)', pointerEvents: 'none'
-                  }}>so'm</span>
+                  <input className="form-input" value={narxDisplay}
+                    onChange={handleNarxChange} placeholder="12 000" inputMode="numeric"
+                    style={{ paddingRight: 50 }} />
+                  <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--text3)' }}>so'm</span>
                 </div>
-                {form.narx && (
-                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-                    = {formatSum(form.narx)} so'm
-                  </div>
-                )}
               </div>
 
-              {/* Miqdor + Birlik */}
+              {/* Mahsulot soni + Birlik */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 12 }}>
                 <div className="form-group">
-                  <label className="form-label">Miqdor</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    value={form.miqdor}
-                    onChange={e => setForm({ ...form, miqdor: e.target.value })}
-                    placeholder="0"
-                  />
+                  <label className="form-label">Mahsulot soni</label>
+                  <input className="form-input" type="number" min="0" step="0.001"
+                    value={form.soni} onChange={e => setForm(f => ({ ...f, soni: e.target.value }))}
+                    placeholder="0" />
                   <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>
-                    1.5, 0.5, 250 va h.k.
+                    1, 1.5, 0.5, 250 va h.k.
                   </div>
                 </div>
-
                 <div className="form-group">
-                  <label className="form-label">Birlik</label>
+                  <label className="form-label">O'lchov birligi</label>
                   {!customBirlik ? (
-                    <>
-                      <select
-                        className="form-input"
-                        value={form.birlik}
-                        onChange={e => {
-                          if (e.target.value === '__custom__') { setCustomBirlik(true); setForm(f => ({ ...f, birlik: '' })); }
-                          else setForm(f => ({ ...f, birlik: e.target.value }));
-                        }}
-                      >
-                        {BIRLIK_GROUPS.map(g => (
-                          <optgroup key={g.group} label={g.group}>
-                            {g.items.map(b => (
-                              <option key={b.value} value={b.value}>{b.label}</option>
-                            ))}
-                          </optgroup>
-                        ))}
-                        <optgroup label="✏️ Boshqa">
-                          <option value="__custom__">Boshqa (qo'lda yozish)</option>
+                    <select className="form-input" value={form.birlik}
+                      onChange={e => {
+                        if (e.target.value === '__custom__') { setCustomBirlik(true); setForm(f => ({ ...f, birlik: '' })); }
+                        else setForm(f => ({ ...f, birlik: e.target.value }));
+                      }}>
+                      {BIRLIK_GROUPS.map(g => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.items.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                         </optgroup>
-                      </select>
-                    </>
+                      ))}
+                      <optgroup label="✏️ Boshqa">
+                        <option value="__custom__">Boshqa (qo'lda yozish)</option>
+                      </optgroup>
+                    </select>
                   ) : (
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <input
-                        className="form-input"
-                        value={form.birlik}
+                      <input className="form-input" value={form.birlik}
                         onChange={e => setForm(f => ({ ...f, birlik: e.target.value }))}
-                        placeholder="o'z birligingiz"
-                        autoFocus
-                      />
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => { setCustomBirlik(false); setForm(f => ({ ...f, birlik: 'dona' })); }}
-                        style={{ whiteSpace: 'nowrap' }}
-                      >✕</button>
+                        placeholder="o'z birligingiz" autoFocus />
+                      <button className="btn btn-secondary btn-sm"
+                        onClick={() => { setCustomBirlik(false); setForm(f => ({ ...f, birlik: 'dona' })); }}>✕</button>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Ko'rinish preview */}
-              {form.narx && form.birlik && (
-                <div style={{
-                  background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px',
-                  fontSize: 13, color: 'var(--text2)', marginBottom: 8,
-                  display: 'flex', gap: 8, alignItems: 'center'
-                }}>
-                  <span>👁️</span>
-                  <span>
-                    Ko'rinish: <strong style={{ color: 'var(--text)' }}>
-                      {formatSum(form.narx)} so'm / {getBirlikLabel(form.birlik)}
-                    </strong>
-                    {form.miqdor && <span> · Miqdor: <strong style={{ color: 'var(--text)' }}>{form.miqdor} {getBirlikLabel(form.birlik)}</strong></span>}
-                  </span>
+              {/* Preview */}
+              {(form.narx || form.soni) && (
+                <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--text2)', marginBottom: 10 }}>
+                  👁️ Ko'rinish: <strong style={{ color: 'var(--text)' }}>
+                    {form.emoji} {form.nomi || '...'} — {formatSum(form.narx)} so'm / {getBirlikLabel(form.birlik)}
+                    {form.soni ? ` · Soni: ${form.soni} ${getBirlikLabel(form.birlik)}` : ''}
+                  </strong>
                 </div>
               )}
+
+              {/* Shtrix-kod */}
+              <div className="form-group">
+                <label className="form-label">📷 Shtrix-kod (ixtiyoriy)</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="form-input" value={form.barcode}
+                    onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                    placeholder="4870000000000" inputMode="numeric" />
+                  <button className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setModal('skaner_inline');
+                    }}
+                    title="Skanerlash">📷</button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                  Shtrix-kod bo'lsa — keyingi safar skanerlashda avtomatik topiladi
+                </div>
+              </div>
 
               {/* Izoh */}
               <div className="form-group">
                 <label className="form-label">Izoh (ixtiyoriy)</label>
                 <input className="form-input" value={form.izoh}
-                  onChange={e => setForm({ ...form, izoh: e.target.value })}
-                  placeholder="Masalan: Import, Qo'shimcha ma'lumot..." />
+                  onChange={e => setForm(f => ({ ...f, izoh: e.target.value }))}
+                  placeholder="Qo'shimcha ma'lumot..." />
               </div>
             </div>
-
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setModal(null)}>Bekor</button>
               <button className="btn btn-primary" onClick={saveMahsulot}>
@@ -524,7 +786,19 @@ export default function Mahsulotlar() {
         </div>
       )}
 
-      {/* ===================== KATEGORIYA MODALI ===================== */}
+      {/* Inline skaner (forma ichida barcode uchun) */}
+      {modal === 'skaner_inline' && (
+        <QrSkanerModal
+          onResult={(barcode) => {
+            setForm(f => ({ ...f, barcode }));
+            toast.success(`✅ Shtrix-kod: ${barcode}`);
+            setModal('mahsulot');
+          }}
+          onClose={() => setModal('mahsulot')}
+        />
+      )}
+
+      {/* ============ KATEGORIYA MODAL ============ */}
       {modal === 'kategoriya' && (
         <div className="modal-overlay" onClick={() => setModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -536,23 +810,20 @@ export default function Mahsulotlar() {
               <div className="form-group">
                 <label className="form-label">Kategoriya nomi *</label>
                 <input className="form-input" value={katForm.nomi}
-                  onChange={e => setKatForm({ ...katForm, nomi: e.target.value })}
+                  onChange={e => setKatForm(f => ({ ...f, nomi: e.target.value }))}
                   placeholder="Masalan: Ichimliklar, Un-yog' mahsulotlar..." />
               </div>
               <div className="form-group">
                 <label className="form-label">Emoji tanlang</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {EMOJIS.map(em => (
-                    <button key={em} onClick={() => setKatForm({ ...katForm, emoji: em })}
+                    <button key={em} onClick={() => setKatForm(f => ({ ...f, emoji: em }))}
                       style={{
                         fontSize: 22, background: katForm.emoji === em ? 'var(--primary)' : 'var(--bg)',
                         border: '2px solid', borderColor: katForm.emoji === em ? 'var(--primary)' : 'var(--border)',
                         borderRadius: 8, padding: '4px 8px', cursor: 'pointer',
-                        transform: katForm.emoji === em ? 'scale(1.2)' : 'scale(1)',
-                        transition: 'all 0.15s',
-                      }}>
-                      {em}
-                    </button>
+                        transform: katForm.emoji === em ? 'scale(1.2)' : 'scale(1)', transition: 'all 0.15s',
+                      }}>{em}</button>
                   ))}
                 </div>
               </div>
@@ -560,13 +831,12 @@ export default function Mahsulotlar() {
                 <label className="form-label">Rang</label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {['#6366f1','#10b981','#ef4444','#f59e0b','#3b82f6','#ec4899','#8b5cf6','#06b6d4','#f97316','#84cc16'].map(r => (
-                    <button key={r} onClick={() => setKatForm({ ...katForm, rang: r })}
+                    <button key={r} onClick={() => setKatForm(f => ({ ...f, rang: r }))}
                       style={{
-                        width: 36, height: 36, borderRadius: '50%', background: r,
+                        width: 36, height: 36, borderRadius: '50%', background: r, cursor: 'pointer',
                         border: katForm.rang === r ? '3px solid white' : '3px solid transparent',
-                        cursor: 'pointer', transition: 'transform 0.15s',
-                        transform: katForm.rang === r ? 'scale(1.2)' : 'scale(1)',
                         boxShadow: katForm.rang === r ? `0 0 0 2px ${r}` : 'none',
+                        transform: katForm.rang === r ? 'scale(1.2)' : 'scale(1)', transition: 'all 0.15s',
                       }} />
                   ))}
                 </div>
