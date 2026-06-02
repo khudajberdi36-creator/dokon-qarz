@@ -64,6 +64,7 @@ export default function NaxtSotuv() {
     setSuccess('');
     if (!form.mahsulot_id) return setError('Mahsulot tanlang');
     if (!form.miqdor || form.miqdor <= 0) return setError("Miqdor 0 dan katta bo'lishi kerak");
+    if (!Number.isInteger(Number(form.miqdor))) return setError("Miqdor butun son bo'lishi kerak");
     if (selectedMahsulot && Number(form.miqdor) > Number(selectedMahsulot.miqdor)) {
       return setError(`Yetarli mahsulot yo'q! Mavjud: ${selectedMahsulot.miqdor} ${selectedMahsulot.birlik}`);
     }
@@ -180,12 +181,12 @@ export default function NaxtSotuv() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">📊 Miqdor *</label>
+              <label className="form-label">📊 Miqdor (dona) *</label>
               <input
                 type="number"
-                min="0.01"
-                step="0.01"
-                max={selectedMahsulot ? selectedMahsulot.miqdor : undefined}
+                min="1"
+                step="1"
+                max={selectedMahsulot ? Math.floor(selectedMahsulot.miqdor) : undefined}
                 value={form.miqdor}
                 onChange={e => setForm(f => ({ ...f, miqdor: e.target.value }))}
                 className="form-input"
@@ -193,7 +194,7 @@ export default function NaxtSotuv() {
               />
               {selectedMahsulot && Number(form.miqdor) > Number(selectedMahsulot.miqdor) && (
                 <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>
-                  ❌ Yetarli emas! Max: {selectedMahsulot.miqdor}
+                  ❌ Yetarli emas! Max: {Math.floor(selectedMahsulot.miqdor)} dona
                 </div>
               )}
             </div>

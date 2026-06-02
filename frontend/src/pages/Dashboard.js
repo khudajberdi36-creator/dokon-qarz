@@ -194,6 +194,7 @@ function MahsulotStatModal({ onClose, navigate }) {
                   <tr>
                     <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>#</th>
                     <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Mahsulot</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Sotuv soni</th>
                     <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Miqdor</th>
                     <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Naxt</th>
                     <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase' }}>Qarz</th>
@@ -218,6 +219,11 @@ function MahsulotStatModal({ onClose, navigate }) {
                           <div style={{ background: 'var(--bg)', borderRadius: 20, height: 4, marginTop: 4, overflow: 'hidden', width: 120 }}>
                             <div style={{ width: foiz + '%', height: '100%', background: COLORS[i % COLORS.length], borderRadius: 20 }} />
                           </div>
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
+                          <span style={{ background: 'var(--bg2)', borderRadius: 20, padding: '2px 10px', fontSize: 13 }}>
+                            {Number(m.sotuv_soni || 0)} marta
+                          </span>
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>
                           {Number(m.jami_miqdor).toLocaleString()} {m.birlik}
@@ -604,7 +610,7 @@ export default function Dashboard() {
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontWeight: 800, color: colors[i % 5], fontSize: 14 }}>{m.jami_miqdor} {m.birlik}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatSum(m.jami_summa)} so'm</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)' }}>{m.sotuv_soni} marta • {formatSum(m.jami_summa)} so'm</div>
                   </div>
                 </div>
               );
