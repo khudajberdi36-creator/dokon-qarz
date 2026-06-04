@@ -815,7 +815,6 @@ export default function QarzdorDetail() {
           onSuccess={() => { setShowMuddatModal(null); load(); }}
         />
       )}
-    </div>
 
       {/* ============ PAROL MODAL ============ */}
       {parolModal === 'qarzdor' && (
@@ -827,5 +826,6 @@ export default function QarzdorDetail() {
           onClose={() => setParolModal(null)}
         />
       )}
+    </div>
   );
 }
