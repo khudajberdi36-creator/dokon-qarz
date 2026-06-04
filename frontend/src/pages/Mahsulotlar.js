@@ -401,6 +401,374 @@ function SkanNatijaModal({ barcode, natija, kategoriyalar, onQosh, onYangiMahsul
   );
 }
 
+
+// ===================== AUDIO MAHSULOT QO'SHISH MODAL =====================
+function AudioMahsulotModal({ kategoriyalar, onClose, onQoshildi }) {
+  const [status, setStatus] = useState('tayyor'); // tayyor | tinglayapti | tahlil | natija | saqlanmoqda
+  const [transcript, setTranscript] = useState('');
+  const [parsed, setParsed] = useState(null); // { nomi, narx, miqdor, birlik, kategoriya_id, emoji }
+  const [xato, setXato] = useState('');
+  const [editForm, setEditForm] = useState(null);
+  const recRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const startRecording = async () => {
+    setXato('');
+    setTranscript('');
+    setParsed(null);
+    setEditForm(null);
+
+    // 1-usul: Web Speech API (tezroq, real-time)
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SR();
+      rec.lang = 'uz-UZ';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.continuous = false;
+      recRef.current = rec;
+      setStatus('tinglayapti');
+
+      rec.onresult = (e) => {
+        const text = e.results[0][0].transcript;
+        setTranscript(text);
+        setStatus('tahlil');
+        parseAudio(text);
+      };
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed') {
+          setXato('❌ Mikrofonga ruxsat berilmagan. Brauzer sozlamalaridan ruxsat bering.');
+        } else if (e.error === 'no-speech') {
+          setXato('🔇 Ovoz eshitilmadi. Qayta urining.');
+        } else {
+          setXato('Ovoz tanib bo\'lmadi: ' + e.error);
+        }
+        setStatus('tayyor');
+      };
+      rec.onend = () => {
+        if (status === 'tinglayapti') setStatus('tayyor');
+      };
+      rec.start();
+      return;
+    }
+
+    // 2-usul: MediaRecorder (fallback)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunksRef.current = [];
+      mr.ondataavailable = e => chunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setStatus('tahlil');
+        setTranscript('(Ovoz yozildi, tahlil qilinmoqda...)');
+        // MediaRecorder bilan to'liq speech-to-text bu yerda cheklangan
+        // Claude API orqali emas — faqat browser SR ishlaydi
+        setXato('Brauzeringiz ovoz tanishni qo\'llab-quvvatlamaydi. Qo\'lda kiriting.');
+        setStatus('tayyor');
+      };
+      recRef.current = mr;
+      mr.start();
+      setStatus('tinglayapti');
+    } catch {
+      setXato('❌ Mikrofonga ulanib bo\'lmadi.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (recRef.current) {
+      if (recRef.current.stop) recRef.current.stop();
+      if (recRef.current.abort) recRef.current.abort();
+    }
+    setStatus('tayyor');
+  };
+
+  // Ovoz matnini mahsulot ma'lumotlariga aylantirish
+  const parseAudio = (text) => {
+    const t = text.toLowerCase().trim();
+
+    // Mahsulot nomini ajratish
+    let nomi = text;
+    let narx = '';
+    let miqdor = '';
+    let birlik = 'dona';
+    let emoji = '📦';
+
+    // Narx pattern: "1000 so'm", "5 ming", "10000"
+    const narxPatterns = [
+      /(\d[\d\s]*)\s*ming\s*so[''m]*/i,
+      /(\d[\d\s]*)\s*so[''m]/i,
+      /(\d[\d\s,]*)\s*narxi?\s*(\d[\d\s]*)/i,
+      /narxi?\s*(\d[\d\s]*)/i,
+    ];
+    for (const p of narxPatterns) {
+      const m = t.match(p);
+      if (m) {
+        let n = m[1] || m[2] || '';
+        n = n.replace(/\s/g, '');
+        if (t.includes('ming')) {
+          narx = String(Number(n) * 1000);
+        } else {
+          narx = n;
+        }
+        nomi = text.replace(m[0], '').trim();
+        break;
+      }
+    }
+
+    // Miqdor pattern: "10 dona", "5 kg", "100 gramm"
+    const birlikMap = {
+      'kg': 'kg', 'kilogramm': 'kg', 'kilo': 'kg',
+      'gramm': 'g', 'gram': 'g', 'g': 'g',
+      'litr': 'litr', 'liter': 'litr',
+      'ml': 'ml', 'millilitr': 'ml',
+      'dona': 'dona', 'dono': 'dona', 'ta': 'dona',
+      'quti': 'quti', 'paket': 'paket',
+      'metr': 'metr', 'sm': 'sm',
+    };
+    const birlikKeys = Object.keys(birlikMap).join('|');
+    const miqRe = new RegExp(`(\\d+[.,]?\\d*)\\s*(${birlikKeys})`, 'i');
+    const miqM = t.match(miqRe);
+    if (miqM) {
+      miqdor = miqM[1].replace(',', '.');
+      birlik = birlikMap[miqM[2].toLowerCase()] || 'dona';
+      nomi = text.replace(miqM[0], '').trim();
+    }
+
+    // Emoji taxmin
+    const emojiMap = [
+      ['cola|pepsi|fanta|sprite|ichimlik|suv|sharbat', '🥤'],
+      ['non|bread', '🍞'],
+      ['shakar|qand|konfet|shirinlik', '🍬'],
+      ['sut|qatiq|kefir|yogurt', '🥛'],
+      ['go\'sht|qo\'y|mol|baliq', '🥩'],
+      ['yog\'|moy|oil', '🧴'],
+      ['un|daqiq', '🌾'],
+      ['choy|qahva|tea|coffee', '☕'],
+      ['meva|olma|banan|limon', '🍎'],
+      ['sabzi|kartoshka|pomidor|piyoz', '🥕'],
+      ['telefon|phone|gadjet', '📱'],
+      ['kiyim|ko\'ylak|shim', '👕'],
+    ];
+    for (const [keys, em] of emojiMap) {
+      if (new RegExp(keys, 'i').test(t)) { emoji = em; break; }
+    }
+
+    // Nomni tozalash
+    nomi = nomi
+      .replace(/\b(narx|narxi|miqdor|dona|ta|soni|qo'shish|yangi)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!nomi) nomi = text.replace(/\d+/g, '').trim() || text;
+
+    const result = {
+      nomi: nomi.charAt(0).toUpperCase() + nomi.slice(1),
+      narx: narx || '',
+      miqdor: miqdor || '',
+      birlik,
+      emoji,
+      kategoriya_id: '',
+    };
+    setParsed(result);
+    setEditForm({ ...result });
+    setStatus('natija');
+  };
+
+  const handleSave = async () => {
+    if (!editForm?.nomi?.trim()) return setXato('Mahsulot nomi kerak');
+    if (!editForm?.narx) return setXato('Narx kerak');
+    setStatus('saqlanmoqda');
+    try {
+      await axios.post('/api/mahsulotlar', {
+        nomi: editForm.nomi,
+        narx: Number(editForm.narx),
+        miqdor: Number(editForm.miqdor) || 0,
+        birlik: editForm.birlik || 'dona',
+        emoji: editForm.emoji || '📦',
+        kategoriya_id: editForm.kategoriya_id || null,
+        izoh: '',
+        barcode: null,
+      });
+      toast.success(`✅ "${editForm.nomi}" qo'shildi`);
+      onQoshildi();
+    } catch (err) {
+      setXato(err.response?.data?.error || 'Xatolik');
+      setStatus('natija');
+    }
+  };
+
+  const BIRLIK_OPTIONS = [
+    'dona','quti','paket','juft','kg','g','500g','250g','100g',
+    'litr','0.5l','1l','1.5l','2l','ml','metr','m2','soat','kun'
+  ];
+  const EMOJIS = ['📦','🥤','🍬','🍫','🥛','🍞','🧴','🧹','❄️','🔧','👕','📱','🍎','🥩','🧆','☕','🍵','🧃','🍺','🥫','🧂','🫙','🛒','🏠','🌾','🥕'];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>🎤 Ovoz bilan mahsulot qo'shish</h3>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+
+          {/* Qo'llanma */}
+          {status === 'tayyor' && !parsed && (
+            <div style={{
+              background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)',
+              borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: '#6ee7b7'
+            }}>
+              💡 <strong>Qanday gapirish kerak?</strong><br />
+              <div style={{ marginTop: 6, lineHeight: 1.7 }}>
+                • "<em>Coca-Cola 1.5L 5000 so'm 10 dona</em>"<br />
+                • "<em>Un 5 kg narxi 30 ming</em>"<br />
+                • "<em>Shakar 2 kg 15000 so'm</em>"
+              </div>
+            </div>
+          )}
+
+          {/* Yozish tugmasi */}
+          {status !== 'natija' && status !== 'saqlanmoqda' && (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              {status === 'tinglayapti' ? (
+                <div>
+                  <div style={{
+                    width: 80, height: 80, borderRadius: '50%', margin: '0 auto 16px',
+                    background: 'rgba(239,68,68,0.15)', border: '3px solid #ef4444',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 36, animation: 'pulse 1s infinite',
+                    boxShadow: '0 0 0 12px rgba(239,68,68,0.1)'
+                  }}>
+                    🎤
+                  </div>
+                  <style>{`@keyframes pulse { 0%,100%{box-shadow:0 0 0 8px rgba(239,68,68,0.1)} 50%{box-shadow:0 0 0 20px rgba(239,68,68,0.05)} }`}</style>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#ef4444', marginBottom: 8 }}>
+                    Tinglayapman...
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>
+                    Mahsulot nomini, narxini va miqdorini ayting
+                  </div>
+                  <button className="btn btn-danger" onClick={stopRecording}>⏹ To'xtatish</button>
+                </div>
+              ) : status === 'tahlil' ? (
+                <div>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>🔄</div>
+                  <div style={{ fontSize: 14, color: 'var(--text2)' }}>Tahlil qilinmoqda...</div>
+                  {transcript && (
+                    <div style={{ marginTop: 12, background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px', fontSize: 13, fontStyle: 'italic' }}>
+                      "{transcript}"
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <button
+                    onClick={startRecording}
+                    style={{
+                      width: 80, height: 80, borderRadius: '50%', fontSize: 36,
+                      background: 'rgba(16,185,129,0.15)', border: '3px solid #10b981',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center',
+                      justifyContent: 'center', margin: '0 auto 16px', transition: 'all 0.2s'
+                    }}
+                  >🎤</button>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Gapirishni boshlash</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)' }}>Tugmani bosib gapiring</div>
+                </div>
+              )}
+
+              {xato && (
+                <div style={{ marginTop: 12, color: '#ef4444', fontSize: 13, background: 'rgba(239,68,68,0.08)', borderRadius: 8, padding: '8px 12px' }}>
+                  {xato}
+                  <div style={{ marginTop: 8 }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => { setXato(''); setStatus('tayyor'); }}>
+                      Qayta urinish
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Natija — tahrirlash */}
+          {(status === 'natija' || status === 'saqlanmoqda') && editForm && (
+            <div>
+              {transcript && (
+                <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--text2)', marginBottom: 14, fontStyle: 'italic' }}>
+                  🎤 "{transcript}"
+                </div>
+              )}
+
+              {/* Emoji */}
+              <div className="form-group">
+                <label className="form-label">Emoji</label>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                  {EMOJIS.map(em => (
+                    <button key={em} onClick={() => setEditForm(f => ({ ...f, emoji: em }))}
+                      style={{
+                        fontSize: 18, padding: '3px 6px', borderRadius: 6, cursor: 'pointer',
+                        background: editForm.emoji === em ? 'var(--accent)' : 'var(--bg)',
+                        border: `2px solid ${editForm.emoji === em ? 'var(--accent)' : 'var(--border)'}`,
+                      }}>{em}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Mahsulot nomi *</label>
+                <input className="form-input" value={editForm.nomi}
+                  onChange={e => setEditForm(f => ({ ...f, nomi: e.target.value }))} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">Narx (so'm) *</label>
+                  <input className="form-input" type="number" value={editForm.narx}
+                    onChange={e => setEditForm(f => ({ ...f, narx: e.target.value }))} placeholder="0" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Miqdor</label>
+                  <input className="form-input" type="number" value={editForm.miqdor}
+                    onChange={e => setEditForm(f => ({ ...f, miqdor: e.target.value }))} placeholder="0" />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Birlik</label>
+                <select className="form-input" value={editForm.birlik}
+                  onChange={e => setEditForm(f => ({ ...f, birlik: e.target.value }))}>
+                  {BIRLIK_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Kategoriya</label>
+                <select className="form-input" value={editForm.kategoriya_id}
+                  onChange={e => setEditForm(f => ({ ...f, kategoriya_id: e.target.value }))}>
+                  <option value="">— Kategoriyasiz —</option>
+                  {kategoriyalar.map(k => <option key={k.id} value={k.id}>{k.emoji} {k.nomi}</option>)}
+                </select>
+              </div>
+
+              {xato && (
+                <div style={{ color: '#ef4444', fontSize: 13, marginBottom: 8 }}>{xato}</div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                <button className="btn btn-secondary" onClick={() => { setParsed(null); setEditForm(null); setStatus('tayyor'); setTranscript(''); }}>
+                  🎤 Qayta yozish
+                </button>
+                <button className="btn btn-success" onClick={handleSave} disabled={status === 'saqlanmoqda'}>
+                  {status === 'saqlanmoqda' ? <span className="spinner" /> : "✅ Saqlash"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ===================== ASOSIY KOMPONENT =====================
 export default function Mahsulotlar() {
   const [mahsulotlar, setMahsulotlar] = useState([]);
@@ -419,6 +787,20 @@ export default function Mahsulotlar() {
   const [narxDisplay, setNarxDisplay] = useState('');
   const [katForm, setKatForm] = useState({ nomi: '', rang: '#6366f1', emoji: '📦' });
   const [customBirlik, setCustomBirlik] = useState(false);
+
+  // ✅ Parol modal (o'chirish uchun)
+  const [parolModal, setParolModal] = useState(null); // { type, id, nomi }
+
+  // ✅ Audio orqali mahsulot qo'shish
+  const [audioModal, setAudioModal] = useState(false);
+  const [audioStatus, setAudioStatus] = useState('');
+  const [audioTranscript, setAudioTranscript] = useState('');
+  const [audioParsed, setAudioParsed] = useState(null); // { nomi, narx, miqdor, birlik }
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+  const mediaRecRef = useRef(null);
+  const chunksRef = useRef([]);
 
   const load = useCallback(async () => {
     try {
@@ -517,9 +899,11 @@ export default function Mahsulotlar() {
     openAdd(barcode);
   };
 
-  const deleteMahsulot = async (id) => {
-    if (!window.confirm("O'chirishga ishonchingiz komilmi?")) return;
-    await axios.delete(`/api/mahsulotlar/${id}`);
+  const deleteMahsulot = (id, nomi) => {
+    setParolModal({ type: 'mahsulot', id, nomi });
+  };
+  const deleteMahsulotConfirm = async () => {
+    await axios.delete(`/api/mahsulotlar/${parolModal.id}`);
     toast.success("🗑️ O'chirildi");
     load();
   };
@@ -554,6 +938,13 @@ export default function Mahsulotlar() {
             style={{ background: 'rgba(99,102,241,0.15)', borderColor: 'rgba(99,102,241,0.4)', color: '#a5b4fc' }}
           >
             📷 QR / Shtrix-kod
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setAudioModal(true)}
+            style={{ background: 'rgba(16,185,129,0.15)', borderColor: 'rgba(16,185,129,0.4)', color: '#34d399' }}
+          >
+            🎤 Ovoz bilan qo'shish
           </button>
           <button className="btn btn-primary" onClick={() => openAdd()}>＋ Mahsulot</button>
         </div>
@@ -673,7 +1064,7 @@ export default function Mahsulotlar() {
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-secondary btn-sm" onClick={() => openEdit(m)}>✏️</button>
-                      <button className="btn btn-danger btn-sm" onClick={() => deleteMahsulot(m.id)}>🗑️</button>
+                      <button className="btn btn-danger btn-sm" onClick={() => deleteMahsulot(m.id, m.nomi)}>🗑️</button>
                     </div>
                   </td>
                 </tr>
@@ -882,6 +1273,34 @@ export default function Mahsulotlar() {
             setModal('mahsulot');
           }}
           onClose={() => setModal('mahsulot')}
+        />
+      )}
+
+      {/* ============ PAROL MODAL ============ */}
+      {parolModal && (
+        <ParolModal
+          title={parolModal.type === 'mahsulot' ? `"${parolModal.nomi}" mahsulotini o'chirish` : `"${parolModal.nomi}" kategoriyasini o'chirish`}
+          subtitle={parolModal.type === 'mahsulot' ? 'Mahsulot butunlay o'chib ketadi.' : 'Kategoriya va unga bog'liq ma'lumotlar o'chadi.'}
+          danger
+          onConfirm={async () => {
+            if (parolModal.type === 'mahsulot') {
+              await deleteMahsulotConfirm();
+            } else {
+              await axios.delete(`/api/mahsulotlar/kategoriyalar/${parolModal.id}`);
+              toast.success("🗑️ Kategoriya o'chirildi");
+              load();
+            }
+          }}
+          onClose={() => setParolModal(null)}
+        />
+      )}
+
+      {/* ============ AUDIO MODAL ============ */}
+      {audioModal && (
+        <AudioMahsulotModal
+          kategoriyalar={kategoriyalar}
+          onClose={() => { setAudioModal(false); }}
+          onQoshildi={() => { setAudioModal(false); load(); }}
         />
       )}
 

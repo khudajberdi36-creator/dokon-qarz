@@ -10,6 +10,7 @@ import QarzdorForm from './pages/QarzdorForm';
 import QarzdorDetail from './pages/QarzdorDetail';
 import MuddatiOtgan from './pages/MuddatiOtgan';
 import AdminPanel from './pages/AdminPanel';
+import Sozlamalar from './pages/Sozlamalar';
 import Mahsulotlar from './pages/Mahsulotlar';
 import KirishTarixi from './pages/KirishTarixi';
 import NaxtSotuv from './pages/NaxtSotuv';
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="mahsulotlar" element={<Mahsulotlar />} />
             <Route path="admin" element={<AdminPanel />} />
             <Route path="kirish-tarixi" element={<KirishTarixi />} />
+            <Route path="sozlamalar" element={<Sozlamalar />} />
             <Route path="naxt-sotuv" element={<NaxtSotuv />} />
           </Route>
         </Routes>
