@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import ParolModal from '../components/ParolModal';
 
 function formatSum(n) { return Number(n || 0).toLocaleString('uz-UZ'); }
 function unformat(val) { return String(val).replace(/\s/g, '').replace(/,/g, '.'); }
