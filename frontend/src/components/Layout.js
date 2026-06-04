@@ -9,7 +9,6 @@ const getNavItems = (role) => [
   { to: '/qarzdorlar',     label: 'Qarzdorlar',        icon: '🧾' },
   { to: '/muddati-otgan',  label: "Muddati o'tgan",   icon: '⚠️' },
   { to: '/mahsulotlar',    label: 'Mahsulotlar',       icon: '🛒' },
-  { to: '/sozlamalar',     label: 'Sozlamalar',        icon: '⚙️' },
   { to: '/naxt-sotuv',     label: 'Naxt sotuv',        icon: '💵' },
   ...(role === 'admin' ? [
     { to: '/admin',          label: 'Admin',            icon: '👑', isAdmin: true },

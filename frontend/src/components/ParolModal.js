@@ -11,7 +11,7 @@ import React, { useState, useEffect, useRef } from 'react';
 // Eng oddiy yondashuv: maxsus o'chirish paroli "1234" yoki user paroli emas,
 // balki app.js da sozlangan DELETE_PIN (default "1234")
 
-const DELETE_PIN = '1234';
+const DELETE_PIN = 'begzod777';
 
 export default function ParolModal({ title, subtitle, onConfirm, onClose, danger }) {
   const [parol, setParol] = useState('');
@@ -82,7 +82,7 @@ export default function ParolModal({ title, subtitle, onConfirm, onClose, danger
               <div style={{ color: '#ef4444', fontSize: 12, marginTop: 6, fontWeight: 600 }}>{xato}</div>
             )}
             <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-              💡 Parolni Sozlamalar sahifasida o'zgartirish mumkin
+              💡 Parolni bilmasangiz administratorga murojaat qiling
             </div>
           </div>
         </div>
