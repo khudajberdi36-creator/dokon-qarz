@@ -149,8 +149,8 @@ router.post('/', auth, async (req, res) => {
       if (existing) return res.status(400).json({ error: 'Bu barcode allaqachon mavjud' });
     }
     const row = await db.run_p(
-      'INSERT INTO mahsulotlar (user_id, kategoriya_id, nomi, narx, miqdor, birlik, izoh, emoji, barcode) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
-      [req.user.id, kategoriya_id || null, nomi, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', barcode || null]
+      'INSERT INTO mahsulotlar (user_id, kategoriya_id, nomi, narx, miqdor, birlik, izoh, emoji, barcode, birlik_miqdor) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+      [req.user.id, kategoriya_id || null, nomi, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', barcode || null, birlik_miqdor || null]
     );
     res.json(row.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -158,7 +158,7 @@ router.post('/', auth, async (req, res) => {
 
 // Mahsulot tahrirlash
 router.put('/:id', auth, async (req, res) => {
-  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji, barcode } = req.body;
+  const { nomi, kategoriya_id, narx, miqdor, birlik, izoh, emoji, barcode, birlik_miqdor } = req.body;
   try {
     if (barcode) {
       const existing = await db.get_p(
@@ -168,8 +168,8 @@ router.put('/:id', auth, async (req, res) => {
       if (existing) return res.status(400).json({ error: 'Bu barcode boshqa mahsulotda bor' });
     }
     const row = await db.run_p(
-      'UPDATE mahsulotlar SET nomi=$1, kategoriya_id=$2, narx=$3, miqdor=$4, birlik=$5, izoh=$6, emoji=$7, barcode=$8 WHERE id=$9 AND user_id=$10 RETURNING *',
-      [nomi, kategoriya_id || null, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', barcode || null, req.params.id, req.user.id]
+      'UPDATE mahsulotlar SET nomi=$1, kategoriya_id=$2, narx=$3, miqdor=$4, birlik=$5, izoh=$6, emoji=$7, barcode=$8, birlik_miqdor=$9 WHERE id=$10 AND user_id=$11 RETURNING *',
+      [nomi, kategoriya_id || null, narx, miqdor || 0, birlik || 'dona', izoh || '', emoji || '📦', barcode || null, birlik_miqdor || null, req.params.id, req.user.id]
     );
     res.json(row.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }

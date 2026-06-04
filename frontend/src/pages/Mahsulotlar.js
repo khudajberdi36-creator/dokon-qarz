@@ -782,7 +782,37 @@ export default function Mahsulotlar() {
   const [skanBarcode, setSkanBarcode] = useState('');
   const [skanNatija, setSkanNatija] = useState(null);
 
-  const emptyForm = { nomi: '', kategoriya_id: '', narx: '', soni: '', birlik: 'dona', izoh: '', barcode: '', emoji: '📦' };
+  const emptyForm = { nomi: '', kategoriya_id: '', narx: '', soni: '', birlik: 'dona', birlik_miqdor: '', izoh: '', barcode: '', emoji: '📦' };
+
+  // Birliklar uchun "bir birlik = ?" qo'shimcha tavsif
+  const BIRLIK_TAVSIF = {
+    'kg': { label: '1 dona nechi kg?', placeholder: '1', hint: 'Masalan: 1 dona = 2 kg', suffix: 'kg' },
+    'g': { label: '1 dona nechi gramm?', placeholder: '100', hint: 'Masalan: 1 dona = 500 gramm', suffix: 'g' },
+    '500g': { label: '1 dona (500g) soni', placeholder: '', hint: '1 dona = 500 gramm', suffix: '' },
+    '250g': { label: '1 dona (250g) soni', placeholder: '', hint: '1 dona = 250 gramm', suffix: '' },
+    '100g': { label: '1 dona (100g) soni', placeholder: '', hint: '1 dona = 100 gramm', suffix: '' },
+    '50g': { label: '1 dona (50g) soni', placeholder: '', hint: '1 dona = 50 gramm', suffix: '' },
+    '2kg': { label: 'Nechta 2kg paket?', placeholder: '1', hint: '1 dona = 2 kg', suffix: '' },
+    '5kg': { label: 'Nechta 5kg qop?', placeholder: '1', hint: '1 dona = 5 kg', suffix: '' },
+    '10kg': { label: 'Nechta 10kg qop?', placeholder: '1', hint: '1 dona = 10 kg', suffix: '' },
+    '25kg': { label: 'Nechta 25kg qop?', placeholder: '1', hint: '1 dona = 25 kg', suffix: '' },
+    '50kg': { label: 'Nechta 50kg qop?', placeholder: '1', hint: '1 dona = 50 kg', suffix: '' },
+    'metr': { label: '1 dona nechi metr?', placeholder: '1', hint: 'Masalan: 1 rulon = 50 metr', suffix: 'm' },
+    'm2': { label: 'Maydon (m²)', placeholder: '1', hint: 'Umumiy kvadrat metr', suffix: 'm²' },
+    'litr': { label: '1 dona nechi litr?', placeholder: '1', hint: 'Masalan: 1 quti = 5 litr', suffix: 'l' },
+    '1l': { label: '1 litrli dona soni', placeholder: '', hint: '1 dona = 1 litr', suffix: '' },
+    '1.5l': { label: '1.5 litrli dona soni', placeholder: '', hint: '1 dona = 1.5 litr', suffix: '' },
+    '2l': { label: '2 litrli dona soni', placeholder: '', hint: '1 dona = 2 litr', suffix: '' },
+    '5l': { label: '5 litrli dona soni', placeholder: '', hint: '1 dona = 5 litr', suffix: '' },
+    '0.5l': { label: '0.5 litrli dona soni', placeholder: '', hint: '1 dona = 0.5 litr', suffix: '' },
+    'ml': { label: '1 dona nechi ml?', placeholder: '330', hint: 'Masalan: 1 banka = 330 ml', suffix: 'ml' },
+    '330ml': { label: '330 ml banka soni', placeholder: '', hint: '1 dona = 330 ml', suffix: '' },
+    '200ml': { label: '200 ml soni', placeholder: '', hint: '1 dona = 200 ml', suffix: '' },
+    'sm': { label: '1 dona nechi sm?', placeholder: '10', hint: 'Uzunlik sm da', suffix: 'sm' },
+    'rol': { label: 'Bir rulon nechi metr?', placeholder: '50', hint: 'Masalan: 1 rulon = 50 metr', suffix: 'm' },
+    'dona': null, 'quti': null, 'paket': null, 'juft': null, "to'plam": null,
+    'varaq': null, 'tayoq': null, 'soat': null, 'kun': null, 'oy': null, 'xizmat': null,
+  };
   const [form, setForm] = useState(emptyForm);
   const [narxDisplay, setNarxDisplay] = useState('');
   const [katForm, setKatForm] = useState({ nomi: '', rang: '#6366f1', emoji: '📦' });
@@ -832,7 +862,8 @@ export default function Mahsulotlar() {
       nomi: m.nomi, kategoriya_id: m.kategoriya_id || '',
       narx: m.narx, soni: m.miqdor,
       birlik: m.birlik, izoh: m.izoh || '',
-      barcode: m.barcode || '', emoji: m.emoji || '📦'
+      barcode: m.barcode || '', emoji: m.emoji || '📦',
+      birlik_miqdor: m.birlik_miqdor || ''
     });
     setNarxDisplay(formatSum(m.narx));
     setCustomBirlik(!ALL_BIRLIKLAR.find(b => b.value === m.birlik));
@@ -854,6 +885,7 @@ export default function Mahsulotlar() {
         narx: Number(unformat(form.narx)),
         miqdor: Number(unformat(form.soni)) || 0,
         barcode: form.barcode.trim() || null,
+        birlik_miqdor: form.birlik_miqdor ? Number(form.birlik_miqdor) : null,
       };
       if (editItem) {
         await axios.put(`/api/mahsulotlar/${editItem.id}`, payload);
@@ -1194,8 +1226,8 @@ export default function Mahsulotlar() {
                   {!customBirlik ? (
                     <select className="form-input" value={form.birlik}
                       onChange={e => {
-                        if (e.target.value === '__custom__') { setCustomBirlik(true); setForm(f => ({ ...f, birlik: '' })); }
-                        else setForm(f => ({ ...f, birlik: e.target.value }));
+                        if (e.target.value === '__custom__') { setCustomBirlik(true); setForm(f => ({ ...f, birlik: '', birlik_miqdor: '' })); }
+                        else setForm(f => ({ ...f, birlik: e.target.value, birlik_miqdor: '' }));
                       }}>
                       {BIRLIK_GROUPS.map(g => (
                         <optgroup key={g.group} label={g.group}>
@@ -1217,6 +1249,43 @@ export default function Mahsulotlar() {
                   )}
                 </div>
               </div>
+
+              {/* ✅ O'lchov birligi uchun qo'shimcha miqdor */}
+              {BIRLIK_TAVSIF[form.birlik] && (
+                <div className="form-group" style={{ marginTop: -6 }}>
+                  <label className="form-label">
+                    📐 {BIRLIK_TAVSIF[form.birlik].label}
+                  </label>
+                  {BIRLIK_TAVSIF[form.birlik].placeholder !== '' ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          className="form-input"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={form.birlik_miqdor}
+                          onChange={e => setForm(f => ({ ...f, birlik_miqdor: e.target.value }))}
+                          placeholder={BIRLIK_TAVSIF[form.birlik].placeholder}
+                          style={{ maxWidth: 120 }}
+                        />
+                        {BIRLIK_TAVSIF[form.birlik].suffix && (
+                          <span style={{ color: 'var(--text2)', fontSize: 14 }}>
+                            {BIRLIK_TAVSIF[form.birlik].suffix}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                        💡 {BIRLIK_TAVSIF[form.birlik].hint}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--text3)', padding: '6px 0' }}>
+                      {BIRLIK_TAVSIF[form.birlik].hint}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Preview */}
               {(form.narx || form.soni) && (
@@ -1280,7 +1349,7 @@ export default function Mahsulotlar() {
       {parolModal && (
         <ParolModal
           title={parolModal.type === 'mahsulot' ? `"${parolModal.nomi}" mahsulotini o'chirish` : `"${parolModal.nomi}" kategoriyasini o'chirish`}
-          subtitle={parolModal.type === 'mahsulot' ? 'Mahsulot butunlay o'chib ketadi.' : 'Kategoriya va unga bog'liq ma'lumotlar o'chadi.'}
+          subtitle={parolModal.type === "mahsulot" ? "Mahsulot butunlay o'chib ketadi." : "Kategoriya va unga bog'liq ma'lumotlar o'chadi."}
           danger
           onConfirm={async () => {
             if (parolModal.type === 'mahsulot') {

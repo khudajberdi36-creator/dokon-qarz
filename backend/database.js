@@ -90,6 +90,7 @@ async function initDB() {
       narx NUMERIC NOT NULL DEFAULT 0,
       miqdor NUMERIC NOT NULL DEFAULT 0,
       birlik TEXT DEFAULT 'dona',
+      birlik_miqdor NUMERIC DEFAULT NULL,
       ogohlantirish_chegara INTEGER DEFAULT 5,
       emoji TEXT DEFAULT '📦',
       barcode TEXT,
@@ -133,6 +134,7 @@ async function initDB() {
     `ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS emoji TEXT DEFAULT '📦'`,
     `ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS mahsulot_miqdor NUMERIC DEFAULT 1`,
     `ALTER TABLE qarzlar ADD COLUMN IF NOT EXISTS mahsulot_birlik TEXT DEFAULT 'dona'`,
+    `ALTER TABLE mahsulotlar ADD COLUMN IF NOT EXISTS birlik_miqdor NUMERIC DEFAULT NULL`,
     // naxt_sotuvlar jadvali mavjud bo'lmasa CREATE qiladi (yuqorida allaqachon)
     // Lekin eski DB larda yo'q bo'lishi mumkin - shuning uchun alohida yaratamiz:
     `CREATE TABLE IF NOT EXISTS naxt_sotuvlar (
