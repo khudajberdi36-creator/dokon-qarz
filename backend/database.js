@@ -111,6 +111,15 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS sozlamalar (
+      id SERIAL PRIMARY KEY,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    INSERT INTO sozlamalar (key, value) VALUES ('otp_phone', NULL) ON CONFLICT (key) DO NOTHING;
+
     CREATE TABLE IF NOT EXISTS kirish_tarixi (
       id SERIAL PRIMARY KEY,
       user_id INTEGER,

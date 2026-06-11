@@ -16,9 +16,16 @@ export default function AdminPanel() {
   const [form, setForm] = useState({ username: '', password: '', full_name: '', dokon_nomi: '', role: 'user' });
   const [passwordModal, setPasswordModal] = useState(null);
   const [newPassword, setNewPassword] = useState('');
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpPhoneInput, setOtpPhoneInput] = useState('');
+  const [otpSaving, setOtpSaving] = useState(false);
 
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/'); return; }
+    axios.get('/api/admin/otp-phone').then(r => {
+      setOtpPhone(r.data.phone || '');
+      setOtpPhoneInput(r.data.phone || '');
+    }).catch(() => {});
     load();
   }, []);
 
@@ -66,6 +73,17 @@ export default function AdminPanel() {
       setPasswordModal(null);
       setNewPassword('');
     } catch (err) { toast.error(err.response?.data?.error || 'Xatolik'); }
+  };
+
+  const saveOtpPhone = async () => {
+    setOtpSaving(true);
+    try {
+      await axios.put('/api/admin/otp-phone', { phone: otpPhoneInput });
+      setOtpPhone(otpPhoneInput);
+      toast.success(otpPhoneInput ? `✅ Telefon saqlandi: ${otpPhoneInput}` : '✅ SMS kod o\'chirildi');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Xatolik');
+    } finally { setOtpSaving(false); }
   };
 
   if (loading) return <div className="loading-page"><div className="spinner" /></div>;
@@ -202,6 +220,51 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* ===== SMS OTP SOZLAMALAR ===== */}
+      <div className="table-card" style={{ padding: 24, marginTop: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>📱 SMS Ikki bosqichli kirish</h3>
+        <p style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 16 }}>
+          Tizimga kirishda login/paroldan keyin ushbu raqamga SMS kod yuboriladi. Bo'sh qoldirsangiz SMS o'chiriladi.
+        </p>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="tel"
+            value={otpPhoneInput}
+            onChange={e => setOtpPhoneInput(e.target.value)}
+            placeholder="+998901234567"
+            className="form-input"
+            style={{ flex: 1, minWidth: 200, maxWidth: 280 }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={saveOtpPhone}
+            disabled={otpSaving}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {otpSaving ? <span className="spinner" /> : '💾 Saqlash'}
+          </button>
+          {otpPhone && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setOtpPhoneInput(''); }}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              🗑️ O'chirish
+            </button>
+          )}
+        </div>
+        {otpPhone && (
+          <div style={{ marginTop: 10, fontSize: 13, color: '#10b981', fontWeight: 600 }}>
+            ✅ Faol: {otpPhone}
+          </div>
+        )}
+        {!otpPhone && (
+          <div style={{ marginTop: 10, fontSize: 13, color: 'var(--text3)' }}>
+            ⚠️ SMS kod o'chirilgan — faqat login/parol bilan kirish
+          </div>
+        )}
+      </div>
     </div>
   );
 }

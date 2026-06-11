@@ -105,4 +105,23 @@ router.get('/qarzdorlar', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// === OTP TELEFON RAQAM ===
+router.get('/otp-phone', adminAuth, async (req, res) => {
+  try {
+    const row = await db.get_p("SELECT value FROM sozlamalar WHERE key = 'otp_phone'");
+    res.json({ phone: row?.value || null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/otp-phone', adminAuth, async (req, res) => {
+  const { phone } = req.body;
+  try {
+    await db.run_p(
+      "INSERT INTO sozlamalar (key, value) VALUES ('otp_phone', $1) ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()",
+      [phone || null]
+    );
+    res.json({ message: "Telefon raqam saqlandi", phone: phone || null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
